@@ -1,24 +1,29 @@
 # Podo360 Admin
 
-Sistema interno da Podo360 para gestão de empresas contratantes, leads, status de acesso, auditoria administrativa e estrutura futura de planos.
+Sistema interno da Podo360 para gestão de empresas contratantes, leads, status de acesso, planos, extras, contratos, feature flags, avisos globais e auditoria administrativa.
 
 ## Responsabilidade
 
 Este repositório não executa fluxo clínico e não deve editar prontuários, atendimentos ou dados assistenciais das clínicas.
 
-Ele será responsável por:
+Ele é responsável por:
 
 - Leads vindos da Landing Page.
 - Cadastro e gestão de empresas contratantes.
 - Ativação, suspensão, inativação e reativação de empresas.
+- Gestão dos planos Start, Clinic, Pro e Master.
+- Gestão de extras comerciais.
+- Controle administrativo de assinaturas e contratos.
+- Feature flags futuras.
+- Avisos globais para o Sistema Clínica.
 - Auditoria administrativa.
-- Preparação de planos e feature flags futuras.
 
 ## Segurança
 
 - Não usar `service_role` no frontend.
 - Não acessar dados clínicos sem regra específica e auditoria.
 - Não expor chaves reais.
+- Não versionar `.env`.
 - Usar RLS forte nas tabelas globais.
 - Separar usuários administrativos da Podo360 dos usuários das clínicas.
 
@@ -41,11 +46,10 @@ pnpm typecheck
 pnpm build
 ```
 
-## Próximos passos
+## Produção
 
-1. Criar migrations globais em etapa futura.
-2. Criar autenticação administrativa.
-3. Implementar listagem real de leads.
-4. Implementar CRUD real de empresas.
-5. Criar Edge Function para receber leads da Landing.
-6. Integrar status da empresa com o Sistema Clínica.
+Não aplique migrations no Supabase produção até validação explícita do responsável. A frase obrigatória para seguir com banco real é:
+
+```text
+APROVADO PRODUÇÃO SUPABASE
+```
