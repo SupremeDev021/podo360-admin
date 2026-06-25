@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -65,17 +66,62 @@ const severityLabels: Record<AnnouncementSeverity, string> = {
 };
 
 const navigationItems = [
-  { href: "#dashboard", label: "Dashboard", icon: BarChart3 },
-  { href: "#leads", label: "Leads", icon: Mail },
-  { href: "#companies", label: "Empresas", icon: Building2 },
-  { href: "#plans", label: "Planos", icon: Layers3 },
-  { href: "#extras", label: "Extras", icon: PackagePlus },
-  { href: "#subscriptions", label: "Assinaturas", icon: CreditCard },
-  { href: "#features", label: "Feature Flags", icon: Flag },
-  { href: "#announcements", label: "Avisos Globais", icon: Bell },
-  { href: "#audit", label: "Auditoria", icon: ClipboardList },
-  { href: "#settings", label: "Configurações", icon: Settings }
-];
+  { id: "dashboard", label: "Dashboard", icon: BarChart3 },
+  { id: "leads", label: "Leads", icon: Mail },
+  { id: "companies", label: "Empresas", icon: Building2 },
+  { id: "plans", label: "Planos", icon: Layers3 },
+  { id: "extras", label: "Extras", icon: PackagePlus },
+  { id: "subscriptions", label: "Assinaturas", icon: CreditCard },
+  { id: "features", label: "Feature Flags", icon: Flag },
+  { id: "announcements", label: "Avisos Globais", icon: Bell },
+  { id: "audit", label: "Auditoria", icon: ClipboardList },
+  { id: "settings", label: "Configurações", icon: Settings }
+] as const;
+
+type SectionId = (typeof navigationItems)[number]["id"];
+
+const sectionCopy: Record<SectionId, { title: string; description: string }> = {
+  dashboard: {
+    title: "Dashboard administrativo da plataforma.",
+    description: "Visão executiva de empresas, leads, receita mapeada e pontos de atenção."
+  },
+  leads: {
+    title: "Leads comerciais.",
+    description: "Acompanhe os contatos vindos da Landing Page e prepare a conversão em empresa contratante."
+  },
+  companies: {
+    title: "Empresas contratantes.",
+    description: "Cadastre, acompanhe e altere status comerciais das clínicas vinculadas à plataforma."
+  },
+  plans: {
+    title: "Planos comerciais.",
+    description: "Gerencie Start, Clinic, Pro e Master sem misturar regras comerciais dentro do Sistema Clínica."
+  },
+  extras: {
+    title: "Extras comerciais.",
+    description: "Controle serviços adicionais, faixas de preço e cobranças avulsas ou recorrentes."
+  },
+  subscriptions: {
+    title: "Assinaturas e contratos.",
+    description: "Organize plano, setup, renovação e contrato mínimo sem cobrança automática nesta fase."
+  },
+  features: {
+    title: "Feature flags.",
+    description: "Prepare recursos liberáveis por plano ou empresa para leitura futura pelo Sistema Clínica."
+  },
+  announcements: {
+    title: "Avisos globais.",
+    description: "Configure mensagens para aparecerem no topo do Sistema Clínica quando a integração estiver ativa."
+  },
+  audit: {
+    title: "Auditoria administrativa.",
+    description: "Histórico de alterações comerciais e mudanças de status feitas pela equipe Podo360."
+  },
+  settings: {
+    title: "Configurações da plataforma.",
+    description: "Checklist de segurança, billing readiness e limites do que ainda não está em produção."
+  }
+};
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -108,12 +154,26 @@ function priceLabel(minPrice?: number, maxPrice?: number, price?: number) {
 }
 
 export function App() {
+  const [activeSection, setActiveSection] = useState<SectionId>("dashboard");
+  const [actionMessage, setActionMessage] = useState("Escolha uma opção do menu para trabalhar em uma tela separada.");
+
   const activeCompanies = companies.filter((company) => company.status === "active").length;
   const blockedCompanies = companies.filter((company) => ["inactive", "suspended", "cancelled"].includes(company.status)).length;
   const pendingLeads = leads.filter((lead) => lead.status === "new" || lead.status === "qualified").length;
   const recurringRevenue = subscriptions
     .filter((subscription) => subscription.status === "active" || subscription.status === "trial")
     .reduce((total, subscription) => total + subscription.monthlyPrice, 0);
+  const currentSection = sectionCopy[activeSection];
+
+  function openSection(section: SectionId, message?: string) {
+    setActiveSection(section);
+    setActionMessage(message ?? `Tela "${sectionCopy[section].title}" aberta.`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function showPreparedAction(message: string) {
+    setActionMessage(message);
+  }
 
   return (
     <main className="admin-shell">
@@ -130,10 +190,15 @@ export function App() {
           {navigationItems.map((item) => {
             const Icon = item.icon;
             return (
-              <a href={item.href} key={item.href}>
+              <button
+                type="button"
+                className={activeSection === item.id ? "sidebar-link sidebar-link--active" : "sidebar-link"}
+                key={item.id}
+                onClick={() => openSection(item.id)}
+              >
                 <Icon size={18} />
                 {item.label}
-              </a>
+              </button>
             );
           })}
         </nav>
@@ -148,18 +213,32 @@ export function App() {
         <header className="topbar">
           <div>
             <span className="eyebrow">Plataforma Podo360</span>
-            <h1>Gestão comercial, planos e liberações das clínicas.</h1>
-            <p>
-              Estrutura preparada para empresas, planos, contratos, feature flags e avisos globais.
-              A integração com o Supabase real só deve ocorrer após validação e aprovação explícita.
-            </p>
+            <h1>{currentSection.title}</h1>
+            <p>{currentSection.description}</p>
           </div>
           <div className="topbar-actions">
-            <button type="button" className="button button--secondary">Exportar visão</button>
-            <button type="button" className="button">Nova empresa</button>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => showPreparedAction("Exportação preparada para a tela atual. A geração real será conectada ao Supabase após aprovação.")}
+            >
+              Exportar visão
+            </button>
+            <button
+              type="button"
+              className="button"
+              onClick={() => openSection("companies", "Formulário de cadastro de empresa aberto.")}
+            >
+              Nova empresa
+            </button>
           </div>
         </header>
 
+        <div className="action-banner" role="status">
+          {actionMessage}
+        </div>
+
+        {activeSection === "dashboard" && (
         <section className="metric-grid" id="dashboard">
           <article className="metric-card">
             <span><Building2 size={20} /></span>
@@ -187,14 +266,22 @@ export function App() {
             <small>Receita mensal mapeada</small>
           </article>
         </section>
+        )}
 
+        {activeSection === "leads" && (
         <section className="panel" id="leads">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Leads</span>
               <h2>Interesses vindos da Landing Page</h2>
             </div>
-            <button type="button" className="button button--secondary">Criar lead manual</button>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => showPreparedAction("Cadastro manual de lead preparado. A gravação real será conectada após Supabase aprovado.")}
+            >
+              Criar lead manual
+            </button>
           </div>
           <div className="responsive-list responsive-list--leads">
             {leads.map((lead) => (
@@ -222,14 +309,22 @@ export function App() {
             ))}
           </div>
         </section>
+        )}
 
+        {activeSection === "companies" && (
         <section className="panel" id="companies">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Empresas</span>
               <h2>Clínicas contratantes</h2>
             </div>
-            <button type="button" className="button">Cadastrar empresa</button>
+            <button
+              type="button"
+              className="button"
+              onClick={() => showPreparedAction("Preencha os campos compactos abaixo para cadastrar uma empresa quando o backend estiver conectado.")}
+            >
+              Cadastrar empresa
+            </button>
           </div>
 
           <div className="form-grid form-grid--compact">
@@ -280,21 +375,41 @@ export function App() {
                   <div><dt>Renovação</dt><dd>{company.renewsAt ? formatDate(company.renewsAt) : "A definir"}</dd></div>
                 </dl>
                 <div className="card-actions">
-                  <button type="button" className="button button--secondary">Ver detalhes</button>
-                  <button type="button" className="button">Alterar status</button>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => showPreparedAction(`Detalhes de ${company.tradingName} selecionados.`)}
+                  >
+                    Ver detalhes
+                  </button>
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={() => showPreparedAction(`Alteração de status de ${company.tradingName} preparada para auditoria.`)}
+                  >
+                    Alterar status
+                  </button>
                 </div>
               </article>
             ))}
           </div>
         </section>
+        )}
 
+        {activeSection === "plans" && (
         <section className="panel" id="plans">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Planos</span>
               <h2>Planos comerciais do Podo360</h2>
             </div>
-            <button type="button" className="button">Novo plano</button>
+            <button
+              type="button"
+              className="button"
+              onClick={() => showPreparedAction("Criação de plano preparada. Os planos atuais já refletem Start, Clinic, Pro e Master.")}
+            >
+              Novo plano
+            </button>
           </div>
 
           <div className="plan-grid">
@@ -330,14 +445,22 @@ export function App() {
             ))}
           </div>
         </section>
+        )}
 
+        {activeSection === "extras" && (
         <section className="panel" id="extras">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Extras</span>
               <h2>Serviços e liberações adicionais</h2>
             </div>
-            <button type="button" className="button button--secondary">Adicionar extra</button>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => showPreparedAction("Cadastro de extra preparado com suporte a valor fixo, mensal e faixa comercial.")}
+            >
+              Adicionar extra
+            </button>
           </div>
 
           <div className="extras-grid">
@@ -354,14 +477,22 @@ export function App() {
             ))}
           </div>
         </section>
+        )}
 
+        {activeSection === "subscriptions" && (
         <section className="panel" id="subscriptions">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Assinaturas / Contratos</span>
               <h2>Controle comercial sem cobrança automática</h2>
             </div>
-            <button type="button" className="button">Nova assinatura</button>
+            <button
+              type="button"
+              className="button"
+              onClick={() => showPreparedAction("Nova assinatura preparada. Cobrança automática continua fora do escopo desta fase.")}
+            >
+              Nova assinatura
+            </button>
           </div>
 
           <div className="responsive-list">
@@ -392,14 +523,22 @@ export function App() {
             ))}
           </div>
         </section>
+        )}
 
+        {activeSection === "features" && (
         <section className="panel" id="features">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Feature Flags</span>
               <h2>Recursos liberáveis por plano ou empresa</h2>
             </div>
-            <button type="button" className="button button--secondary">Nova feature</button>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => showPreparedAction("Cadastro de feature preparado. O Sistema Clínica ainda não bloqueia módulos por plano.")}
+            >
+              Nova feature
+            </button>
           </div>
 
           <div className="feature-grid">
@@ -415,14 +554,22 @@ export function App() {
             ))}
           </div>
         </section>
+        )}
 
+        {activeSection === "announcements" && (
         <section className="panel" id="announcements">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Avisos Globais</span>
               <h2>Mensagens para o topo do Sistema Clínica</h2>
             </div>
-            <button type="button" className="button">Criar aviso</button>
+            <button
+              type="button"
+              className="button"
+              onClick={() => showPreparedAction("Formulário de aviso global aberto. A publicação real depende da tabela platform_announcements.")}
+            >
+              Criar aviso
+            </button>
           </div>
 
           <div className="announcement-layout">
@@ -460,11 +607,19 @@ export function App() {
                   <input type="datetime-local" />
                 </label>
               </div>
-              <button type="button" className="button">Salvar aviso</button>
+              <button
+                type="button"
+                className="button"
+                onClick={() => showPreparedAction("Aviso validado localmente. Salvamento real será ativado após integração Supabase.")}
+              >
+                Salvar aviso
+              </button>
             </form>
           </div>
         </section>
+        )}
 
+        {activeSection === "audit" && (
         <section className="panel" id="audit">
           <div className="panel-heading">
             <div>
@@ -485,7 +640,9 @@ export function App() {
             ))}
           </div>
         </section>
+        )}
 
+        {activeSection === "settings" && (
         <section className="panel" id="settings">
           <div className="panel-heading">
             <div>
@@ -511,6 +668,7 @@ export function App() {
             </article>
           </div>
         </section>
+        )}
       </section>
     </main>
   );
