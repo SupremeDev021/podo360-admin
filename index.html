@@ -8,6 +8,21 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      const isPages = window.location.hostname.endsWith("github.io");
+      const base = isPages ? "/podo360-admin" : "";
+
+      if (isPages) {
+        const stylesheet = document.createElement("link");
+        stylesheet.rel = "stylesheet";
+        stylesheet.href = `${base}/assets/index-C-SiqCFA.css`;
+        document.head.appendChild(stylesheet);
+      }
+
+      const script = document.createElement("script");
+      script.type = "module";
+      script.src = isPages ? `${base}/assets/index-CsMhp_lT.js` : "/src/main.tsx";
+      document.body.appendChild(script);
+    </script>
   </body>
 </html>
