@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -34,6 +34,8 @@ import type {
   LeadStatus,
   SubscriptionStatus
 } from "./types/platform";
+import { adminRoutes, normalizePath, toBrowserPath, type AdminRouteKey } from "./config";
+import { isSupabaseConfigured } from "./services/supabase";
 
 const statusLabels: Record<CompanyStatus, string> = {
   active: "Ativa",
@@ -79,6 +81,33 @@ const navigationItems = [
 ] as const;
 
 type SectionId = (typeof navigationItems)[number]["id"];
+
+const sectionRoutes: Record<SectionId, string> = {
+  dashboard: adminRoutes.dashboard,
+  leads: adminRoutes.dashboard,
+  companies: adminRoutes.companies,
+  plans: adminRoutes.plans,
+  extras: adminRoutes.extras,
+  subscriptions: adminRoutes.subscriptions,
+  features: adminRoutes.features,
+  announcements: adminRoutes.announcements,
+  audit: adminRoutes.audit,
+  settings: adminRoutes.settings
+};
+
+const routeSections: Partial<Record<string, SectionId>> = {
+  "/": "dashboard",
+  "/admin": "dashboard",
+  [adminRoutes.dashboard]: "dashboard",
+  [adminRoutes.companies]: "companies",
+  [adminRoutes.plans]: "plans",
+  [adminRoutes.extras]: "extras",
+  [adminRoutes.subscriptions]: "subscriptions",
+  [adminRoutes.features]: "features",
+  [adminRoutes.announcements]: "announcements",
+  [adminRoutes.audit]: "audit",
+  [adminRoutes.settings]: "settings"
+};
 
 const sectionCopy: Record<SectionId, { title: string; description: string }> = {
   dashboard: {
@@ -153,8 +182,125 @@ function priceLabel(minPrice?: number, maxPrice?: number, price?: number) {
   return price ? formatCurrency(price) : "Sob consulta";
 }
 
+function AdminLogin() {
+  return (
+    <main className="auth-shell">
+      <section className="auth-card">
+        <span className="eyebrow">Podo360 Admin</span>
+        <h1>Login administrativo</h1>
+        <p>
+          A autenticação real será feita pelo Supabase Auth. Se ainda não existe usuário, use o setup inicial.
+        </p>
+
+        <div className="setup-status">
+          <strong>Supabase</strong>
+          <span>{isSupabaseConfigured ? "Variáveis públicas configuradas." : "Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY."}</span>
+        </div>
+
+        <a className="button" href={toBrowserPath(adminRoutes.setup)}>
+          Abrir setup do primeiro admin
+        </a>
+        <a className="button button--secondary" href={toBrowserPath(adminRoutes.dashboard)}>
+          Ver painel em modo leitura
+        </a>
+      </section>
+    </main>
+  );
+}
+
+function InitialSetup() {
+  const [authUserId, setAuthUserId] = useState("");
+  const [fullName, setFullName] = useState("Administrador da Clínica");
+  const [email, setEmail] = useState("");
+  const [companyId, setCompanyId] = useState("");
+  const [platformOwner, setPlatformOwner] = useState(false);
+
+  const profileSql = useMemo(() => {
+    const safeUserId = authUserId.trim() || "<auth_user_id>";
+    const safeCompanyId = companyId.trim() || "<company_id>";
+    const safeName = fullName.trim().replace(/'/g, "''") || "Administrador da Clínica";
+    const safeEmail = email.trim().replace(/'/g, "''") || "<email_do_usuario>";
+
+    const profile = `insert into public.profiles (id, company_id, full_name, email, role, active)
+values ('${safeUserId}', '${safeCompanyId}', '${safeName}', '${safeEmail}', 'company_admin', true)
+on conflict (id) do update set
+  company_id = excluded.company_id,
+  full_name = excluded.full_name,
+  email = excluded.email,
+  role = excluded.role,
+  active = true,
+  updated_at = now();`;
+
+    if (!platformOwner) return profile;
+
+    return `${profile}
+
+insert into public.platform_admin_users (user_id, role, active)
+values ('${safeUserId}', 'owner', true)
+on conflict (user_id) do update set
+  role = excluded.role,
+  active = true,
+  updated_at = now();`;
+  }, [authUserId, companyId, email, fullName, platformOwner]);
+
+  return (
+    <main className="auth-shell">
+      <section className="auth-card auth-card--wide">
+        <span className="eyebrow">Setup seguro</span>
+        <h1>Primeiro usuário administrador</h1>
+        <p>
+          Crie o usuário no Supabase Auth pelo painel, copie o ID gerado e use este assistente para montar o vínculo
+          em `profiles`. Nenhuma senha deve ser colocada no código ou em migration.
+        </p>
+
+        <div className="setup-grid">
+          <label>
+            Auth user ID
+            <input value={authUserId} onChange={(event) => setAuthUserId(event.target.value)} placeholder="UUID do usuário criado no Auth" />
+          </label>
+          <label>
+            Nome completo
+            <input value={fullName} onChange={(event) => setFullName(event.target.value)} />
+          </label>
+          <label>
+            E-mail
+            <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="email do usuário" />
+          </label>
+          <label>
+            Company ID
+            <input value={companyId} onChange={(event) => setCompanyId(event.target.value)} placeholder="company_id da clínica" />
+          </label>
+        </div>
+
+        <label className="checkbox-row">
+          <input type="checkbox" checked={platformOwner} onChange={(event) => setPlatformOwner(event.target.checked)} />
+          Também criar como owner do Podo360 Admin
+        </label>
+
+        <div className="setup-status">
+          <strong>Regra de segurança</strong>
+          <span>Use este SQL manualmente no Supabase SQL Editor. Não cole senha aqui e não versione scripts locais.</span>
+        </div>
+
+        <pre className="sql-box">{profileSql}</pre>
+
+        <div className="card-actions">
+          <a className="button" href="https://supabase.com/dashboard/project/xnntitaajweajashzgtk/auth/users" target="_blank" rel="noreferrer">
+            Abrir Supabase Auth
+          </a>
+          <a className="button button--secondary" href={toBrowserPath(adminRoutes.login)}>
+            Voltar para login
+          </a>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export function App() {
-  const [activeSection, setActiveSection] = useState<SectionId>("dashboard");
+  const getCurrentPath = () => normalizePath(window.location.pathname);
+  const [currentPath, setCurrentPath] = useState(getCurrentPath);
+  const [activeSection, setActiveSection] = useState<SectionId>(() => routeSections[getCurrentPath()] ?? "dashboard");
   const [actionMessage, setActionMessage] = useState("Escolha uma opção do menu para trabalhar em uma tela separada.");
 
   const activeCompanies = companies.filter((company) => company.status === "active").length;
@@ -165,14 +311,36 @@ export function App() {
     .reduce((total, subscription) => total + subscription.monthlyPrice, 0);
   const currentSection = sectionCopy[activeSection];
 
+  useEffect(() => {
+    function handlePopState() {
+      const nextPath = getCurrentPath();
+      setCurrentPath(nextPath);
+      setActiveSection(routeSections[nextPath] ?? "dashboard");
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
   function openSection(section: SectionId, message?: string) {
     setActiveSection(section);
+    const nextRoute = sectionRoutes[section];
+    setCurrentPath(nextRoute);
+    window.history.pushState({}, "", toBrowserPath(nextRoute));
     setActionMessage(message ?? `Tela "${sectionCopy[section].title}" aberta.`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function showPreparedAction(message: string) {
     setActionMessage(message);
+  }
+
+  if (currentPath === adminRoutes.setup) {
+    return <InitialSetup />;
+  }
+
+  if (currentPath === adminRoutes.login) {
+    return <AdminLogin />;
   }
 
   return (

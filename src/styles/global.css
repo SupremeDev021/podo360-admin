@@ -27,6 +27,10 @@ body {
   min-width: 320px;
 }
 
+a {
+  color: inherit;
+}
+
 button,
 input,
 select,
@@ -81,6 +85,89 @@ code {
   display: grid;
   grid-template-columns: minmax(236px, 292px) 1fr;
   min-height: 100vh;
+}
+
+.auth-shell,
+.error-screen {
+  align-items: center;
+  background:
+    radial-gradient(circle at top left, rgba(20, 184, 166, 0.18), transparent 34rem),
+    linear-gradient(135deg, #052f2d 0%, #0f3d39 48%, #eef7f5 48%);
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.auth-card,
+.error-card {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 16px;
+  max-width: 520px;
+  padding: clamp(22px, 4vw, 34px);
+  width: 100%;
+}
+
+.auth-card--wide {
+  max-width: 920px;
+}
+
+.auth-card h1,
+.error-card h1 {
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  line-height: 1.05;
+  margin: 0;
+}
+
+.auth-card p,
+.error-card p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.setup-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.setup-status {
+  background: #ecfeff;
+  border: 1px solid rgba(14, 116, 144, 0.18);
+  border-radius: 16px;
+  color: #155e75;
+  display: grid;
+  gap: 4px;
+  padding: 13px 14px;
+}
+
+.checkbox-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.checkbox-row input {
+  min-height: auto;
+  width: auto;
+}
+
+.sql-box,
+.error-card pre {
+  background: #082f2d;
+  border-radius: 18px;
+  color: #dffdf8;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 16px;
+  white-space: pre-wrap;
 }
 
 .sidebar {
@@ -596,6 +683,7 @@ dd {
 
   .sidebar nav,
   .metric-grid,
+  .setup-grid,
   .form-grid--compact,
   .form-grid--two,
   .extras-grid,
