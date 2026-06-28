@@ -343,6 +343,23 @@ small {
   color: var(--primary-dark);
 }
 
+.production-note {
+  align-items: center;
+  background: rgba(15, 118, 110, 0.12);
+  border: 1px solid rgba(20, 184, 166, 0.22);
+  border-radius: 999px;
+  bottom: 18px;
+  color: #99f6e4;
+  display: inline-flex;
+  font-size: 0.82rem;
+  gap: 8px;
+  left: 50%;
+  max-width: calc(100% - 32px);
+  padding: 10px 14px;
+  position: fixed;
+  transform: translateX(-50%);
+}
+
 .eyebrow {
   color: var(--primary);
   font-size: 0.74rem;

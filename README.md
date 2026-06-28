@@ -21,6 +21,7 @@ Ele é responsável por:
 ## Segurança
 
 - Não usar `service_role` no frontend.
+- Leaked Password Protection do Supabase Auth exige Supabase Pro ou superior no projeto atual; manter como pendência operacional até upgrade do plano.
 - Não acessar dados clínicos sem regra específica e auditoria.
 - Não expor chaves reais.
 - Não versionar `.env`.
