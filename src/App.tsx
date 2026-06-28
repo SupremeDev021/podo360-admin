@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { adminRoutes, normalizePath, toBrowserPath } from "./config";
 import { isSupabaseConfigured } from "./services/supabase";
@@ -117,7 +117,17 @@ on conflict (user_id) do update set
 }
 
 export function App() {
-  const currentPath = normalizePath(window.location.pathname);
+  const [currentPath, setCurrentPath] = useState(() => normalizePath(window.location.pathname));
+
+  useEffect(() => {
+    const syncRoute = () => setCurrentPath(normalizePath(window.location.pathname));
+    window.addEventListener("popstate", syncRoute);
+    window.addEventListener("hashchange", syncRoute);
+    return () => {
+      window.removeEventListener("popstate", syncRoute);
+      window.removeEventListener("hashchange", syncRoute);
+    };
+  }, []);
 
   if (currentPath === adminRoutes.setup) {
     return <InitialSetup />;
