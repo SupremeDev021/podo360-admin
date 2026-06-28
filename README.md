@@ -49,6 +49,8 @@ pnpm build
 
 ## Produção
 
+Este repositório separado foi limpo para não exibir painel mockado/read-only em produção. O Admin Global real validado para operação está integrado ao repositório principal `podo360` na rota `/admin`.
+
 Não aplique migrations no Supabase produção até validação explícita do responsável. A frase obrigatória para seguir com banco real é:
 
 ```text
