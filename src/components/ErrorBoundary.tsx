@@ -36,7 +36,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <span className="eyebrow">Podo360 Admin</span>
           <h1>Não foi possível carregar o painel administrativo.</h1>
           <p>
-            Atualize a página. Se o problema continuar, verifique as variáveis de ambiente e o console do navegador.
+            Tente atualizar a página ou entre em contato com o suporte.
           </p>
 
           {isDevelopment && (

@@ -3,6 +3,8 @@ import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { adminRoutes, normalizePath, toBrowserPath } from "./config";
 import { isSupabaseConfigured } from "./services/supabase";
 
+const ADMIN_UNAVAILABLE_MESSAGE = "Nao foi possivel conectar ao servico no momento. Tente novamente em instantes ou entre em contato com o suporte.";
+
 function escapeSql(value: string) {
   return value.trim().replace(/'/g, "''");
 }
@@ -19,8 +21,8 @@ function AdminLogin() {
         </p>
 
         <div className="setup-status">
-          <strong>Supabase</strong>
-          <span>{isSupabaseConfigured ? "Variaveis publicas configuradas." : "Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY."}</span>
+          <strong>Ambiente</strong>
+          <span>{isSupabaseConfigured ? "Servico de autenticacao disponivel." : import.meta.env.DEV ? "Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY." : ADMIN_UNAVAILABLE_MESSAGE}</span>
         </div>
 
         <a className="button" href={toBrowserPath(adminRoutes.setup)}>
@@ -72,7 +74,7 @@ on conflict (user_id) do update set
         <span className="eyebrow">Setup seguro</span>
         <h1>Primeiro usuario administrador</h1>
         <p>
-          Crie o usuario no Supabase Auth pelo painel, copie o ID gerado e use este assistente apenas para montar o
+          Crie o usuario no painel de autenticacao, copie o ID gerado e use este assistente apenas para montar o
           vinculo em <code>profiles</code>. Nenhuma senha deve ser colocada no codigo, em migration ou em documento.
         </p>
 
@@ -103,7 +105,7 @@ on conflict (user_id) do update set
 
         <div className="setup-warning">
           <LockKeyhole size={18} />
-          <span>Use este SQL somente no projeto Supabase correto. Nunca coloque senha neste arquivo ou no Git.</span>
+          <span>Use este SQL somente no projeto correto. Nunca coloque senha neste arquivo ou no Git.</span>
         </div>
 
         <a className="button button--secondary" href={toBrowserPath(adminRoutes.login)}>
