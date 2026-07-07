@@ -1,36 +1,63 @@
 # Podo360 Admin
 
-Sistema interno da Podo360 para gestão de empresas contratantes, leads, status de acesso, planos, extras, contratos, feature flags, avisos globais e auditoria administrativa.
+Sistema Admin Global separado da Podo360 para gestao de empresas contratantes, leads, planos, extras, assinaturas, feature flags, avisos globais e auditoria administrativa.
 
 ## Responsabilidade
 
-Este repositório não executa fluxo clínico e não deve editar prontuários, atendimentos ou dados assistenciais das clínicas.
+Este repositorio nao executa fluxo clinico e nao deve editar prontuarios, atendimentos ou dados assistenciais das clinicas.
 
-Ele é responsável por:
+Ele e responsavel por:
 
 - Leads vindos da Landing Page.
-- Cadastro e gestão de empresas contratantes.
-- Ativação, suspensão, inativação e reativação de empresas.
-- Gestão dos planos Start, Clinic, Pro e Master.
-- Gestão de extras comerciais.
+- Cadastro e gestao de empresas contratantes.
+- Ativacao, suspensao, inativacao e reativacao de empresas.
+- Gestao dos planos Start, Clinic, Pro e Master.
+- Gestao de extras comerciais.
 - Controle administrativo de assinaturas e contratos.
 - Feature flags futuras.
-- Avisos globais para o Sistema Clínica.
+- Avisos globais para o Sistema Clinica.
 - Auditoria administrativa.
 
-## Segurança
+## Acesso
 
-- Não usar `service_role` no frontend.
-- Leaked Password Protection do Supabase Auth exige Supabase Pro ou superior no projeto atual; manter como pendência operacional até upgrade do plano.
-- Não acessar dados clínicos sem regra específica e auditoria.
-- Não expor chaves reais.
-- Não versionar `.env`.
+O usuario precisa existir no Supabase Auth e tambem em `public.platform_admin_users`.
+
+Exemplo para vincular um usuario Auth como Admin Global:
+
+```sql
+insert into public.platform_admin_users (user_id, role, active)
+values ('<auth_user_id>', 'owner', true)
+on conflict (user_id) do update set
+  role = excluded.role,
+  active = true,
+  updated_at = now();
+```
+
+Nunca coloque senha nesse SQL.
+
+## GitHub Pages
+
+Como o GitHub Pages nao faz rewrite de rotas SPA, o Admin usa hash routing em producao.
+
+URLs principais:
+
+- `https://supremedev021.github.io/podo360-admin/#/admin/login`
+- `https://supremedev021.github.io/podo360-admin/#/admin/setup`
+- `https://supremedev021.github.io/podo360-admin/#/admin/dashboard`
+
+## Seguranca
+
+- Nao usar `service_role` no frontend.
+- Nao expor chaves reais.
+- Nao versionar `.env`, `.env.local` ou `.env.test.local`.
+- Usar apenas `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` no navegador.
 - Usar RLS forte nas tabelas globais.
-- Separar usuários administrativos da Podo360 dos usuários das clínicas.
+- Separar usuarios administrativos da Podo360 dos usuarios das clinicas.
+- Leaked Password Protection do Supabase Auth exige Supabase Pro ou superior no projeto atual; manter como pendencia operacional ate upgrade do plano.
 
-## Variáveis de ambiente
+## Variaveis de ambiente
 
-Crie `.env` a partir de `.env.example`:
+Crie `.env.local` a partir de `.env.example`:
 
 ```bash
 VITE_SUPABASE_URL=
@@ -47,12 +74,8 @@ pnpm typecheck
 pnpm build
 ```
 
-## Produção
+## Producao
 
-Este repositório separado foi limpo para não exibir painel mockado/read-only em produção. O Admin Global real validado para operação está integrado ao repositório principal `podo360` na rota `/admin`.
+O Admin separado carrega dados reais das tabelas `platform_*` via Supabase Auth e RLS. Ele nao deve exibir dados mockados em producao.
 
-Não aplique migrations no Supabase produção até validação explícita do responsável. A frase obrigatória para seguir com banco real é:
-
-```text
-APROVADO PRODUÇÃO SUPABASE
-```
+Nao aplique migrations no Supabase producao ate validacao explicita do responsavel.

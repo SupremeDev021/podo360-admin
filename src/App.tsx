@@ -1,81 +1,425 @@
-import { useEffect, useMemo, useState } from "react";
-import { LockKeyhole, ShieldCheck } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  BarChart3,
+  Bell,
+  Building2,
+  CheckCircle2,
+  ClipboardList,
+  CreditCard,
+  Flag,
+  Layers3,
+  LockKeyhole,
+  LogOut,
+  Mail,
+  PackagePlus,
+  RefreshCw,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Users
+} from "lucide-react";
+import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
 import { adminRoutes, normalizePath, toBrowserPath } from "./config";
-import { isSupabaseConfigured } from "./services/supabase";
+import { isSupabaseConfigured, supabase } from "./services/supabase";
 
-const ADMIN_UNAVAILABLE_MESSAGE = "Nao foi possivel conectar ao servico no momento. Tente novamente em instantes ou entre em contato com o suporte.";
+const ADMIN_UNAVAILABLE_MESSAGE =
+  "Nao foi possivel conectar ao servico no momento. Tente novamente em instantes ou entre em contato com o suporte.";
+const AUTH_REQUIRED_MESSAGE = "Entre com um usuario Admin Global ativo para gerenciar a plataforma Podo360.";
+const PLATFORM_ADMIN_DENIED_MESSAGE =
+  "Seu usuario nao possui permissao de Admin Global ativa. Entre em contato com o suporte Podo360.";
+
+type SectionId =
+  | "dashboard"
+  | "leads"
+  | "companies"
+  | "plans"
+  | "extras"
+  | "subscriptions"
+  | "features"
+  | "announcements"
+  | "audit"
+  | "settings";
+
+type CompanyStatus = "active" | "trial" | "inactive" | "suspended" | "cancelled";
+type LeadStatus = "new" | "contacted" | "qualified" | "converted" | "lost" | "spam";
+type SubscriptionStatus = "active" | "trial" | "past_due" | "suspended" | "cancelled";
+type BillingType = "monthly" | "one_time" | "project";
+type AnnouncementSeverity = "info" | "warning" | "maintenance" | "critical";
+
+type AdminUser = {
+  user_id: string;
+  role: "owner" | "admin" | "support" | "commercial";
+  active: boolean;
+};
+
+type PlatformPlan = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  monthly_price: number | null;
+  setup_fee: number | null;
+  is_custom_price: boolean;
+  max_users: number | null;
+  max_professionals: number | null;
+  max_patients: number | null;
+  active: boolean;
+  display_order: number;
+};
+
+type PlatformExtra = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  price: number | null;
+  min_price: number | null;
+  max_price: number | null;
+  is_range_price: boolean;
+  billing_type: BillingType;
+  active: boolean;
+};
+
+type PlatformCompany = {
+  id: string;
+  clinic_company_id: string | null;
+  company_name: string;
+  trading_name: string | null;
+  cnpj: string | null;
+  responsible_name: string | null;
+  responsible_email: string | null;
+  responsible_phone: string | null;
+  status: CompanyStatus;
+  plan_id: string | null;
+  created_at: string;
+  activated_at: string | null;
+  suspended_at: string | null;
+};
+
+type PlatformSubscription = {
+  id: string;
+  company_id: string;
+  plan_id: string | null;
+  status: SubscriptionStatus;
+  monthly_price: number | null;
+  setup_fee: number | null;
+  starts_at: string | null;
+  renews_at: string | null;
+  contract_min_months: number;
+  notes: string | null;
+};
+
+type PlatformFeature = {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  active: boolean;
+};
+
+type PlatformLead = {
+  id: string;
+  name: string;
+  clinic_name: string | null;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  source: string | null;
+  message: string | null;
+  status: LeadStatus;
+  created_at: string;
+};
+
+type PlatformAnnouncement = {
+  id: string;
+  title: string | null;
+  message: string;
+  severity: AnnouncementSeverity;
+  active: boolean;
+  dismissible: boolean;
+  target_scope: "all" | "specific_companies";
+  starts_at: string | null;
+  ends_at: string | null;
+};
+
+type PlatformStatusLog = {
+  id: string;
+  company_id: string;
+  previous_status: CompanyStatus | null;
+  new_status: CompanyStatus;
+  reason: string | null;
+  created_at: string;
+};
+
+type DashboardData = {
+  plans: PlatformPlan[];
+  extras: PlatformExtra[];
+  companies: PlatformCompany[];
+  subscriptions: PlatformSubscription[];
+  features: PlatformFeature[];
+  leads: PlatformLead[];
+  announcements: PlatformAnnouncement[];
+  statusLogs: PlatformStatusLog[];
+};
+
+type CompanyForm = {
+  companyName: string;
+  tradingName: string;
+  responsibleName: string;
+  responsibleEmail: string;
+  responsiblePhone: string;
+  cnpj: string;
+  status: CompanyStatus;
+  planId: string;
+};
+
+type PlanForm = {
+  name: string;
+  slug: string;
+  description: string;
+  monthlyPrice: string;
+  setupFee: string;
+  customPrice: boolean;
+};
+
+type AnnouncementForm = {
+  title: string;
+  message: string;
+  severity: AnnouncementSeverity;
+  startsAt: string;
+  endsAt: string;
+  active: boolean;
+};
+
+const navigationItems: Array<{ id: SectionId; label: string; icon: typeof BarChart3; route: string }> = [
+  { id: "dashboard", label: "Dashboard", icon: BarChart3, route: adminRoutes.dashboard },
+  { id: "leads", label: "Leads", icon: Mail, route: "/admin/leads" },
+  { id: "companies", label: "Empresas", icon: Building2, route: adminRoutes.companies },
+  { id: "plans", label: "Planos", icon: Layers3, route: adminRoutes.plans },
+  { id: "extras", label: "Extras", icon: PackagePlus, route: adminRoutes.extras },
+  { id: "subscriptions", label: "Assinaturas", icon: CreditCard, route: adminRoutes.subscriptions },
+  { id: "features", label: "Feature Flags", icon: Flag, route: adminRoutes.features },
+  { id: "announcements", label: "Avisos Globais", icon: Bell, route: adminRoutes.announcements },
+  { id: "audit", label: "Auditoria", icon: ClipboardList, route: adminRoutes.audit },
+  { id: "settings", label: "Configuracoes", icon: Settings, route: adminRoutes.settings }
+];
+
+const routeToSection = new Map(navigationItems.map((item) => [item.route, item.id]));
+
+const sectionCopy: Record<SectionId, { title: string; description: string }> = {
+  dashboard: {
+    title: "Dashboard administrativo da plataforma.",
+    description: "Visao executiva de empresas, leads, receita mapeada e pontos de atencao."
+  },
+  leads: {
+    title: "Leads comerciais.",
+    description: "Acompanhe os contatos vindos da landing page e prepare a conversao em empresa contratante."
+  },
+  companies: {
+    title: "Empresas contratantes.",
+    description: "Cadastre, acompanhe e altere status comerciais das clinicas vinculadas a plataforma."
+  },
+  plans: {
+    title: "Planos comerciais.",
+    description: "Gerencie Start, Clinic, Pro e Master sem misturar regras comerciais no Sistema Clinica."
+  },
+  extras: {
+    title: "Extras comerciais.",
+    description: "Controle servicos adicionais, faixas de preco e cobrancas avulsas ou recorrentes."
+  },
+  subscriptions: {
+    title: "Assinaturas e contratos.",
+    description: "Organize plano, setup, renovacao e contrato minimo sem cobranca automatica nesta fase."
+  },
+  features: {
+    title: "Feature flags.",
+    description: "Prepare recursos liberaveis por plano ou empresa para leitura pelo Sistema Clinica."
+  },
+  announcements: {
+    title: "Avisos globais.",
+    description: "Configure mensagens para aparecerem no topo do Sistema Clinica."
+  },
+  audit: {
+    title: "Auditoria administrativa.",
+    description: "Historico de alteracoes comerciais e mudancas de status feitas pela equipe Podo360."
+  },
+  settings: {
+    title: "Configuracoes da plataforma.",
+    description: "Checklist de seguranca, billing readiness e limites do que ainda nao esta em producao."
+  }
+};
+
+const statusLabels: Record<CompanyStatus, string> = {
+  active: "Ativa",
+  trial: "Trial",
+  inactive: "Inativa",
+  suspended: "Suspensa",
+  cancelled: "Cancelada"
+};
+
+const leadLabels: Record<LeadStatus, string> = {
+  new: "Novo",
+  contacted: "Contato feito",
+  qualified: "Qualificado",
+  converted: "Convertido",
+  lost: "Perdido",
+  spam: "Spam"
+};
+
+const subscriptionLabels: Record<SubscriptionStatus, string> = {
+  active: "Ativa",
+  trial: "Trial",
+  past_due: "Em atraso",
+  suspended: "Suspensa",
+  cancelled: "Cancelada"
+};
+
+const severityLabels: Record<AnnouncementSeverity, string> = {
+  info: "Informativo",
+  warning: "Atencao",
+  maintenance: "Manutencao",
+  critical: "Critico"
+};
+
+const emptyDashboardData: DashboardData = {
+  plans: [],
+  extras: [],
+  companies: [],
+  subscriptions: [],
+  features: [],
+  leads: [],
+  announcements: [],
+  statusLogs: []
+};
 
 function escapeSql(value: string) {
   return value.trim().replace(/'/g, "''");
 }
 
-function AdminLogin() {
-  return (
-    <main className="auth-shell">
-      <section className="auth-card">
-        <span className="eyebrow">Podo360 Admin</span>
-        <h1>Admin Global separado</h1>
-        <p>
-          Este repositorio esta limpo para producao e nao exibe dados mockados. O Admin Global real validado para
-          producao esta integrado ao sistema principal Podo360 em <strong>/admin</strong>.
-        </p>
+function formatDate(value: string | null) {
+  if (!value) return "A definir";
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(new Date(value));
+}
 
-        <div className="setup-status">
-          <strong>Ambiente</strong>
-          <span>{isSupabaseConfigured ? "Servico de autenticacao disponivel." : import.meta.env.DEV ? "Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY." : ADMIN_UNAVAILABLE_MESSAGE}</span>
-        </div>
+function formatCurrency(value: number | null | undefined) {
+  if (value == null) return "Sob consulta";
+  return `R$ ${Number(value).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+}
 
-        <a className="button" href={toBrowserPath(adminRoutes.setup)}>
-          Abrir setup do primeiro admin
-        </a>
-      </section>
-    </main>
-  );
+function toNumberOrNull(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return ADMIN_UNAVAILABLE_MESSAGE;
+}
+
+function getPlanName(plans: PlatformPlan[], planId: string | null) {
+  return plans.find((plan) => plan.id === planId)?.name ?? "A definir";
+}
+
+function getCompanyName(companies: PlatformCompany[], companyId: string) {
+  const company = companies.find((item) => item.id === companyId);
+  return company?.trading_name || company?.company_name || "Empresa nao vinculada";
+}
+
+function navigateTo(route: string) {
+  window.history.pushState(null, "", toBrowserPath(route));
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+async function requireSupabase() {
+  if (!supabase) {
+    throw new Error(ADMIN_UNAVAILABLE_MESSAGE);
+  }
+
+  return supabase;
+}
+
+async function fetchAdminUser(client: SupabaseClient, userId: string): Promise<AdminUser | null> {
+  const { data, error } = await client
+    .from("platform_admin_users")
+    .select("user_id, role, active")
+    .eq("user_id", userId)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as AdminUser | null;
+}
+
+async function fetchDashboardData(client: SupabaseClient): Promise<DashboardData> {
+  const [
+    plans,
+    extras,
+    companies,
+    subscriptions,
+    features,
+    leads,
+    announcements,
+    statusLogs
+  ] = await Promise.all([
+    client.from("platform_plans").select("*").order("display_order", { ascending: true }),
+    client.from("platform_plan_extras").select("*").order("created_at", { ascending: false }),
+    client.from("platform_companies").select("*").order("created_at", { ascending: false }),
+    client.from("platform_company_subscriptions").select("*").order("created_at", { ascending: false }),
+    client.from("platform_features").select("*").order("key", { ascending: true }),
+    client.from("platform_leads").select("*").order("created_at", { ascending: false }),
+    client.from("platform_announcements").select("*").order("created_at", { ascending: false }),
+    client.from("platform_company_status_logs").select("*").order("created_at", { ascending: false }).limit(50)
+  ]);
+
+  const responses = [plans, extras, companies, subscriptions, features, leads, announcements, statusLogs];
+  const firstError = responses.find((response) => response.error)?.error;
+  if (firstError) throw firstError;
+
+  return {
+    plans: (plans.data ?? []) as PlatformPlan[],
+    extras: (extras.data ?? []) as PlatformExtra[],
+    companies: (companies.data ?? []) as PlatformCompany[],
+    subscriptions: (subscriptions.data ?? []) as PlatformSubscription[],
+    features: (features.data ?? []) as PlatformFeature[],
+    leads: (leads.data ?? []) as PlatformLead[],
+    announcements: (announcements.data ?? []) as PlatformAnnouncement[],
+    statusLogs: (statusLogs.data ?? []) as PlatformStatusLog[]
+  };
 }
 
 function InitialSetup() {
   const [authUserId, setAuthUserId] = useState("");
-  const [fullName, setFullName] = useState("Administrador da Clinica");
   const [email, setEmail] = useState("");
-  const [companyId, setCompanyId] = useState("");
-  const [platformOwner, setPlatformOwner] = useState(false);
+  const [platformRole, setPlatformRole] = useState<AdminUser["role"]>("owner");
 
-  const profileSql = useMemo(() => {
+  const sql = useMemo(() => {
     const safeUserId = escapeSql(authUserId) || "<auth_user_id>";
-    const safeCompanyId = escapeSql(companyId) || "<company_id>";
-    const safeName = escapeSql(fullName) || "Administrador da Clinica";
-    const safeEmail = escapeSql(email) || "<email_do_usuario>";
-
-    const profile = `insert into public.profiles (id, company_id, full_name, email, role, active)
-values ('${safeUserId}', '${safeCompanyId}', '${safeName}', '${safeEmail}', 'company_admin', true)
-on conflict (id) do update set
-  company_id = excluded.company_id,
-  full_name = excluded.full_name,
-  email = excluded.email,
-  role = excluded.role,
-  active = true,
-  updated_at = now();`;
-
-    if (!platformOwner) return profile;
-
-    return `${profile}
-
-insert into public.platform_admin_users (user_id, role, active)
-values ('${safeUserId}', 'owner', true)
+    return `insert into public.platform_admin_users (user_id, role, active)
+values ('${safeUserId}', '${platformRole}', true)
 on conflict (user_id) do update set
   role = excluded.role,
   active = true,
   updated_at = now();`;
-  }, [authUserId, companyId, email, fullName, platformOwner]);
+  }, [authUserId, platformRole]);
 
   return (
     <main className="auth-shell">
       <section className="auth-card auth-card--wide">
         <span className="eyebrow">Setup seguro</span>
-        <h1>Primeiro usuario administrador</h1>
+        <h1>Primeiro Admin Global</h1>
         <p>
-          Crie o usuario no painel de autenticacao, copie o ID gerado e use este assistente apenas para montar o
-          vinculo em <code>profiles</code>. Nenhuma senha deve ser colocada no codigo, em migration ou em documento.
+          Crie o usuario em Authentication, copie o User UID e use este assistente apenas para montar o vinculo em
+          <code>platform_admin_users</code>. Nenhuma senha deve ser colocada no codigo, em migration ou em documento.
         </p>
 
         <div className="setup-grid">
@@ -84,33 +428,695 @@ on conflict (user_id) do update set
             <input value={authUserId} onChange={(event) => setAuthUserId(event.target.value)} placeholder="UUID do usuario criado no Auth" />
           </label>
           <label>
-            Nome completo
-            <input value={fullName} onChange={(event) => setFullName(event.target.value)} />
+            E-mail de referencia
+            <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="admin@podo360.com" />
           </label>
           <label>
-            E-mail
-            <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="admin@clinica.com" />
-          </label>
-          <label>
-            Company ID
-            <input value={companyId} onChange={(event) => setCompanyId(event.target.value)} placeholder="UUID da empresa" />
-          </label>
-          <label className="check-row">
-            <input type="checkbox" checked={platformOwner} onChange={(event) => setPlatformOwner(event.target.checked)} />
-            Tambem criar registro owner em platform_admin_users
+            Papel no Admin Global
+            <select value={platformRole} onChange={(event) => setPlatformRole(event.target.value as AdminUser["role"])}>
+              <option value="owner">Owner</option>
+              <option value="admin">Admin</option>
+              <option value="support">Suporte</option>
+              <option value="commercial">Comercial</option>
+            </select>
           </label>
         </div>
 
-        <pre className="sql-preview">{profileSql}</pre>
+        <pre className="sql-box">{sql}</pre>
 
         <div className="setup-warning">
           <LockKeyhole size={18} />
           <span>Use este SQL somente no projeto correto. Nunca coloque senha neste arquivo ou no Git.</span>
         </div>
 
-        <a className="button button--secondary" href={toBrowserPath(adminRoutes.login)}>
-          Voltar
-        </a>
+        <button type="button" className="button button--secondary" onClick={() => navigateTo(adminRoutes.login)}>
+          Ir para login
+        </button>
+      </section>
+    </main>
+  );
+}
+
+function LoginScreen({ onAuthenticated }: { onAuthenticated: (session: Session, user: User, adminUser: AdminUser) => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+
+    if (!email.trim() || !password.trim()) {
+      setMessage("Informe e-mail e senha para acessar o Admin Global.");
+      return;
+    }
+
+    if (!isSupabaseConfigured) {
+      setMessage(import.meta.env.DEV ? "Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY." : ADMIN_UNAVAILABLE_MESSAGE);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const client = await requireSupabase();
+      const { data, error } = await client.auth.signInWithPassword({
+        email: email.trim(),
+        password
+      });
+
+      if (error || !data.session || !data.user) {
+        setMessage("E-mail ou senha invalidos.");
+        return;
+      }
+
+      const adminUser = await fetchAdminUser(client, data.user.id);
+      if (!adminUser) {
+        await client.auth.signOut();
+        setMessage(PLATFORM_ADMIN_DENIED_MESSAGE);
+        return;
+      }
+
+      onAuthenticated(data.session, data.user, adminUser);
+      navigateTo(adminRoutes.dashboard);
+    } catch (error) {
+      setMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="auth-shell">
+      <form className="auth-card" onSubmit={handleSubmit}>
+        <span className="eyebrow">Podo360 Admin</span>
+        <h1>Admin Global separado</h1>
+        <p>{AUTH_REQUIRED_MESSAGE}</p>
+
+        <label>
+          E-mail
+          <input value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" type="email" />
+        </label>
+
+        <label>
+          Senha
+          <input value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" type="password" />
+        </label>
+
+        {message && <div className="setup-status setup-status--danger">{message}</div>}
+
+        <button type="submit" className="button" disabled={loading}>
+          {loading ? "Validando..." : "Entrar"}
+        </button>
+
+        <button type="button" className="button button--secondary" onClick={() => navigateTo(adminRoutes.setup)}>
+          Setup do primeiro Admin Global
+        </button>
+      </form>
+    </main>
+  );
+}
+
+function LoadingScreen() {
+  return (
+    <main className="auth-shell">
+      <section className="auth-card">
+        <span className="eyebrow">Podo360 Admin</span>
+        <h1>Validando acesso...</h1>
+        <p>Estamos conferindo sua sessao e permissao de Admin Global.</p>
+      </section>
+    </main>
+  );
+}
+
+function DeniedScreen({ message, onLogout }: { message: string; onLogout: () => void }) {
+  return (
+    <main className="auth-shell">
+      <section className="auth-card">
+        <span className="eyebrow">Acesso bloqueado</span>
+        <h1>Nao foi possivel abrir o Admin Global.</h1>
+        <p>{message}</p>
+        <button type="button" className="button" onClick={onLogout}>
+          Voltar ao login
+        </button>
+      </section>
+    </main>
+  );
+}
+
+function DashboardApp({
+  user,
+  adminUser,
+  onLogout
+}: {
+  user: User;
+  adminUser: AdminUser;
+  onLogout: () => void;
+}) {
+  const [activeSection, setActiveSection] = useState<SectionId>(() => routeToSection.get(normalizePath(window.location.pathname)) ?? "dashboard");
+  const [data, setData] = useState<DashboardData>(emptyDashboardData);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [actionMessage, setActionMessage] = useState("Admin Global conectado ao Supabase oficial. Escolha uma tela do menu.");
+  const [companyForm, setCompanyForm] = useState<CompanyForm>({
+    companyName: "",
+    tradingName: "",
+    responsibleName: "",
+    responsibleEmail: "",
+    responsiblePhone: "",
+    cnpj: "",
+    status: "trial",
+    planId: ""
+  });
+  const [planForm, setPlanForm] = useState<PlanForm>({
+    name: "",
+    slug: "",
+    description: "",
+    monthlyPrice: "",
+    setupFee: "",
+    customPrice: false
+  });
+  const [announcementForm, setAnnouncementForm] = useState<AnnouncementForm>({
+    title: "",
+    message: "",
+    severity: "info",
+    startsAt: "",
+    endsAt: "",
+    active: false
+  });
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const client = await requireSupabase();
+      const nextData = await fetchDashboardData(client);
+      setData(nextData);
+      setActionMessage("Dados reais carregados do Supabase.");
+    } catch (error) {
+      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    const syncRoute = () => setActiveSection(routeToSection.get(normalizePath(window.location.pathname)) ?? "dashboard");
+    window.addEventListener("popstate", syncRoute);
+    window.addEventListener("hashchange", syncRoute);
+    return () => {
+      window.removeEventListener("popstate", syncRoute);
+      window.removeEventListener("hashchange", syncRoute);
+    };
+  }, []);
+
+  const activeCompanies = data.companies.filter((company) => company.status === "active").length;
+  const blockedCompanies = data.companies.filter((company) => ["inactive", "suspended", "cancelled"].includes(company.status)).length;
+  const pendingLeads = data.leads.filter((lead) => lead.status === "new" || lead.status === "qualified").length;
+  const recurringRevenue = data.subscriptions
+    .filter((subscription) => subscription.status === "active" || subscription.status === "trial")
+    .reduce((total, subscription) => total + Number(subscription.monthly_price ?? 0), 0);
+  const currentSection = sectionCopy[activeSection];
+
+  function openSection(section: SectionId) {
+    const route = navigationItems.find((item) => item.id === section)?.route ?? adminRoutes.dashboard;
+    navigateTo(route);
+    setActiveSection(section);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function createCompany(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!companyForm.companyName.trim()) {
+      setActionMessage("Informe o nome da empresa antes de salvar.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const { error } = await client.from("platform_companies").insert({
+        company_name: companyForm.companyName.trim(),
+        trading_name: companyForm.tradingName.trim() || null,
+        responsible_name: companyForm.responsibleName.trim() || null,
+        responsible_email: companyForm.responsibleEmail.trim() || null,
+        responsible_phone: companyForm.responsiblePhone.trim() || null,
+        cnpj: companyForm.cnpj.trim() || null,
+        status: companyForm.status,
+        plan_id: companyForm.planId || null,
+        activated_at: companyForm.status === "active" ? new Date().toISOString() : null
+      });
+
+      if (error) throw error;
+      setActionMessage("Empresa criada no Admin Global.");
+      setCompanyForm({ companyName: "", tradingName: "", responsibleName: "", responsibleEmail: "", responsiblePhone: "", cnpj: "", status: "trial", planId: "" });
+      await loadData();
+    } catch (error) {
+      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateCompanyStatus(company: PlatformCompany, status: CompanyStatus) {
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const { error } = await client
+        .from("platform_companies")
+        .update({
+          status,
+          activated_at: status === "active" ? new Date().toISOString() : company.activated_at,
+          suspended_at: status === "suspended" ? new Date().toISOString() : company.suspended_at
+        })
+        .eq("id", company.id);
+
+      if (error) throw error;
+
+      await client.from("platform_company_status_logs").insert({
+        company_id: company.id,
+        previous_status: company.status,
+        new_status: status,
+        reason: `Alteracao feita pelo Admin Global (${adminUser.role}).`,
+        changed_by: user.id
+      });
+
+      setActionMessage(`Status de ${company.trading_name || company.company_name} alterado para ${statusLabels[status]}.`);
+      await loadData();
+    } catch (error) {
+      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createPlan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!planForm.name.trim() || !planForm.slug.trim()) {
+      setActionMessage("Informe nome e slug do plano.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const { error } = await client.from("platform_plans").insert({
+        name: planForm.name.trim(),
+        slug: planForm.slug.trim().toLowerCase(),
+        description: planForm.description.trim() || null,
+        monthly_price: toNumberOrNull(planForm.monthlyPrice),
+        setup_fee: toNumberOrNull(planForm.setupFee),
+        is_custom_price: planForm.customPrice,
+        active: true,
+        display_order: data.plans.length * 10 + 10
+      });
+
+      if (error) throw error;
+      setActionMessage("Plano criado no Admin Global.");
+      setPlanForm({ name: "", slug: "", description: "", monthlyPrice: "", setupFee: "", customPrice: false });
+      await loadData();
+    } catch (error) {
+      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function togglePlan(plan: PlatformPlan) {
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const { error } = await client.from("platform_plans").update({ active: !plan.active }).eq("id", plan.id);
+      if (error) throw error;
+      setActionMessage(`Plano ${plan.name} ${plan.active ? "desativado" : "ativado"}.`);
+      await loadData();
+    } catch (error) {
+      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createAnnouncement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!announcementForm.message.trim()) {
+      setActionMessage("Informe a mensagem do aviso.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const { error } = await client.from("platform_announcements").insert({
+        title: announcementForm.title.trim() || null,
+        message: announcementForm.message.trim(),
+        severity: announcementForm.severity,
+        active: announcementForm.active,
+        target_scope: "all",
+        starts_at: announcementForm.startsAt ? new Date(announcementForm.startsAt).toISOString() : null,
+        ends_at: announcementForm.endsAt ? new Date(announcementForm.endsAt).toISOString() : null,
+        created_by: user.id
+      });
+
+      if (error) throw error;
+      setActionMessage("Aviso global criado.");
+      setAnnouncementForm({ title: "", message: "", severity: "info", startsAt: "", endsAt: "", active: false });
+      await loadData();
+    } catch (error) {
+      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleAnnouncement(announcement: PlatformAnnouncement) {
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const { error } = await client.from("platform_announcements").update({ active: !announcement.active }).eq("id", announcement.id);
+      if (error) throw error;
+      setActionMessage(`Aviso ${announcement.active ? "desativado" : "ativado"}.`);
+      await loadData();
+    } catch (error) {
+      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <main className="admin-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <span><ShieldCheck size={23} /></span>
+          <div>
+            <strong>Podo360 Admin</strong>
+            <small>Admin Global separado</small>
+          </div>
+        </div>
+
+        <nav aria-label="Administracao Podo360">
+          {navigationItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                type="button"
+                className={activeSection === item.id ? "sidebar-link sidebar-link--active" : "sidebar-link"}
+                key={item.id}
+                onClick={() => openSection(item.id)}
+              >
+                <Icon size={18} />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="security-note">
+          <LockKeyhole size={17} />
+          <span>Repositorio separado, dados reais por RLS e Supabase Auth. Sem service_role no frontend.</span>
+        </div>
+      </aside>
+
+      <section className="content">
+        <header className="topbar">
+          <div>
+            <span className="eyebrow">Plataforma Podo360</span>
+            <h1>{currentSection.title}</h1>
+            <p>{currentSection.description}</p>
+            <small>Logado como {user.email} • Perfil Admin Global: {adminUser.role}</small>
+          </div>
+          <div className="topbar-actions">
+            <button type="button" className="button button--secondary" onClick={() => void loadData()} disabled={loading}>
+              <RefreshCw size={16} />
+              Atualizar
+            </button>
+            <button type="button" className="button button--secondary" onClick={onLogout}>
+              <LogOut size={16} />
+              Sair
+            </button>
+          </div>
+        </header>
+
+        <div className="action-banner" role="status">
+          {loading ? "Carregando dados reais..." : actionMessage}
+        </div>
+
+        {activeSection === "dashboard" && (
+          <section className="metric-grid" id="dashboard">
+            <article className="metric-card">
+              <span><Building2 size={20} /></span>
+              <strong>{data.companies.length}</strong>
+              <small>Empresas cadastradas</small>
+            </article>
+            <article className="metric-card">
+              <span><CheckCircle2 size={20} /></span>
+              <strong>{activeCompanies}</strong>
+              <small>Empresas ativas</small>
+            </article>
+            <article className="metric-card">
+              <span><AlertTriangle size={20} /></span>
+              <strong>{blockedCompanies}</strong>
+              <small>Bloqueadas/inativas</small>
+            </article>
+            <article className="metric-card">
+              <span><Users size={20} /></span>
+              <strong>{pendingLeads}</strong>
+              <small>Leads para acompanhar</small>
+            </article>
+            <article className="metric-card metric-card--wide">
+              <span><CreditCard size={20} /></span>
+              <strong>{formatCurrency(recurringRevenue)}</strong>
+              <small>Receita mensal mapeada</small>
+            </article>
+          </section>
+        )}
+
+        {activeSection === "leads" && (
+          <section className="panel" id="leads">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">Leads</span>
+                <h2>Interesses vindos da Landing Page</h2>
+              </div>
+            </div>
+            <div className="responsive-list responsive-list--leads">
+              {data.leads.map((lead) => (
+                <article className="list-card" key={lead.id}>
+                  <div><strong>{lead.name}</strong><small>{lead.email || "Sem e-mail"} • {lead.phone || "Sem telefone"}</small></div>
+                  <div><span className="field-label">Clinica</span><span>{lead.clinic_name || "Nao informado"}</span></div>
+                  <div><span className="field-label">Cidade</span><span>{lead.city || "Nao informado"}</span></div>
+                  <div><span className={`badge badge--${lead.status}`}>{leadLabels[lead.status]}</span></div>
+                  <div><span className="field-label">Origem</span><span>{lead.source || "Manual"}</span></div>
+                </article>
+              ))}
+              {!data.leads.length && <p>Nenhum lead cadastrado ainda.</p>}
+            </div>
+          </section>
+        )}
+
+        {activeSection === "companies" && (
+          <section className="panel" id="companies">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">Empresas</span>
+                <h2>Clinicas contratantes</h2>
+              </div>
+            </div>
+
+            <form className="form-grid form-grid--compact" onSubmit={(event) => void createCompany(event)}>
+              <label>Razao social<input value={companyForm.companyName} onChange={(event) => setCompanyForm((form) => ({ ...form, companyName: event.target.value }))} placeholder="Nome da empresa" /></label>
+              <label>Nome fantasia<input value={companyForm.tradingName} onChange={(event) => setCompanyForm((form) => ({ ...form, tradingName: event.target.value }))} placeholder="Clinica" /></label>
+              <label>Responsavel<input value={companyForm.responsibleName} onChange={(event) => setCompanyForm((form) => ({ ...form, responsibleName: event.target.value }))} /></label>
+              <label>E-mail<input type="email" value={companyForm.responsibleEmail} onChange={(event) => setCompanyForm((form) => ({ ...form, responsibleEmail: event.target.value }))} /></label>
+              <label>Telefone<input value={companyForm.responsiblePhone} onChange={(event) => setCompanyForm((form) => ({ ...form, responsiblePhone: event.target.value }))} /></label>
+              <label>CNPJ<input value={companyForm.cnpj} onChange={(event) => setCompanyForm((form) => ({ ...form, cnpj: event.target.value }))} /></label>
+              <label>Status
+                <select value={companyForm.status} onChange={(event) => setCompanyForm((form) => ({ ...form, status: event.target.value as CompanyStatus }))}>
+                  {Object.entries(statusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+                </select>
+              </label>
+              <label>Plano
+                <select value={companyForm.planId} onChange={(event) => setCompanyForm((form) => ({ ...form, planId: event.target.value }))}>
+                  <option value="">Sem plano</option>
+                  {data.plans.map((plan) => <option value={plan.id} key={plan.id}>{plan.name}</option>)}
+                </select>
+              </label>
+              <button type="submit" className="button" disabled={saving}>Cadastrar empresa</button>
+            </form>
+
+            <div className="company-grid">
+              {data.companies.map((company) => (
+                <article className="company-card" key={company.id}>
+                  <div className="card-title-row">
+                    <span className={`status-pill status-pill--${company.status}`}>{statusLabels[company.status]}</span>
+                    <span className="plan-chip">{getPlanName(data.plans, company.plan_id)}</span>
+                  </div>
+                  <div><h3>{company.trading_name || company.company_name}</h3><p>{company.company_name}</p></div>
+                  <dl>
+                    <div><dt>CNPJ</dt><dd>{company.cnpj || "Nao informado"}</dd></div>
+                    <div><dt>Responsavel</dt><dd>{company.responsible_name || "Nao informado"}</dd></div>
+                    <div><dt>E-mail</dt><dd>{company.responsible_email || "Nao informado"}</dd></div>
+                    <div><dt>Telefone</dt><dd>{company.responsible_phone || "Nao informado"}</dd></div>
+                    <div><dt>Company clinica</dt><dd>{company.clinic_company_id || "Nao vinculada"}</dd></div>
+                    <div><dt>Criada em</dt><dd>{formatDate(company.created_at)}</dd></div>
+                  </dl>
+                  <div className="card-actions">
+                    <button type="button" className="button button--secondary" disabled={saving || company.status === "active"} onClick={() => void updateCompanyStatus(company, "active")}>Ativar</button>
+                    <button type="button" className="button button--secondary" disabled={saving || company.status === "suspended"} onClick={() => void updateCompanyStatus(company, "suspended")}>Suspender</button>
+                    <button type="button" className="button button--secondary" disabled={saving || company.status === "cancelled"} onClick={() => void updateCompanyStatus(company, "cancelled")}>Cancelar</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeSection === "plans" && (
+          <section className="panel" id="plans">
+            <div className="panel-heading"><div><span className="eyebrow">Planos</span><h2>Planos comerciais do Podo360</h2></div></div>
+            <form className="form-grid form-grid--compact" onSubmit={(event) => void createPlan(event)}>
+              <label>Nome<input value={planForm.name} onChange={(event) => setPlanForm((form) => ({ ...form, name: event.target.value }))} /></label>
+              <label>Slug<input value={planForm.slug} onChange={(event) => setPlanForm((form) => ({ ...form, slug: event.target.value }))} /></label>
+              <label>Mensalidade<input inputMode="decimal" value={planForm.monthlyPrice} onChange={(event) => setPlanForm((form) => ({ ...form, monthlyPrice: event.target.value }))} /></label>
+              <label>Setup<input inputMode="decimal" value={planForm.setupFee} onChange={(event) => setPlanForm((form) => ({ ...form, setupFee: event.target.value }))} /></label>
+              <label className="form-grid--span">Descricao<input value={planForm.description} onChange={(event) => setPlanForm((form) => ({ ...form, description: event.target.value }))} /></label>
+              <label className="checkbox-row"><input type="checkbox" checked={planForm.customPrice} onChange={(event) => setPlanForm((form) => ({ ...form, customPrice: event.target.checked }))} /> Preco sob consulta/a partir de</label>
+              <button type="submit" className="button" disabled={saving}>Criar plano</button>
+            </form>
+            <div className="plan-grid">
+              {data.plans.map((plan) => (
+                <article className="plan-card" key={plan.id}>
+                  <div className="card-title-row">
+                    <span className="plan-chip">#{plan.display_order}</span>
+                    <span className={plan.active ? "status-pill status-pill--active" : "status-pill status-pill--inactive"}>{plan.active ? "Ativo" : "Inativo"}</span>
+                  </div>
+                  <h3>{plan.name}</h3>
+                  <p>{plan.description || "Sem descricao"}</p>
+                  <div className="price-row"><strong>{plan.is_custom_price ? `A partir de ${formatCurrency(plan.monthly_price)}` : formatCurrency(plan.monthly_price)}</strong><small>mensalidade</small></div>
+                  <div className="price-row price-row--setup"><strong>{plan.is_custom_price ? `A partir de ${formatCurrency(plan.setup_fee)}` : formatCurrency(plan.setup_fee)}</strong><small>setup</small></div>
+                  <div className="limit-grid"><span>{plan.max_users ?? "Ilimitado"} usuarios</span><span>{plan.max_professionals ?? "Ilimitado"} profissionais</span><span>{plan.max_patients ?? "Ilimitado"} pacientes</span></div>
+                  <button type="button" className="button button--secondary" disabled={saving} onClick={() => void togglePlan(plan)}>{plan.active ? "Desativar" : "Ativar"}</button>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeSection === "extras" && (
+          <section className="panel" id="extras">
+            <div className="panel-heading"><div><span className="eyebrow">Extras</span><h2>Servicos e liberacoes adicionais</h2></div></div>
+            <div className="extras-grid">
+              {data.extras.map((extra) => (
+                <article className="compact-card" key={extra.id}>
+                  <div className="card-title-row"><strong>{extra.name}</strong><span className={extra.active ? "status-dot status-dot--active" : "status-dot"} /></div>
+                  <p>{extra.description || "Sem descricao"}</p>
+                  <strong className="compact-price">{extra.is_range_price ? `${formatCurrency(extra.min_price)} a ${formatCurrency(extra.max_price)}` : formatCurrency(extra.price)}</strong>
+                  <small>{extra.billing_type === "monthly" ? "recorrente mensal" : extra.billing_type === "one_time" ? "cobranca unica" : "projeto/faixa comercial"}</small>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeSection === "subscriptions" && (
+          <section className="panel" id="subscriptions">
+            <div className="panel-heading"><div><span className="eyebrow">Assinaturas / Contratos</span><h2>Controle comercial sem cobranca automatica</h2></div></div>
+            <div className="responsive-list">
+              {data.subscriptions.map((subscription) => (
+                <article className="list-card list-card--subscription" key={subscription.id}>
+                  <div><strong>{getCompanyName(data.companies, subscription.company_id)}</strong><small>Contrato minimo: {subscription.contract_min_months} meses</small></div>
+                  <div><span className="field-label">Plano</span><span>{getPlanName(data.plans, subscription.plan_id)}</span></div>
+                  <div><span className="field-label">Mensalidade</span><span>{formatCurrency(subscription.monthly_price)}</span></div>
+                  <div><span className="field-label">Setup</span><span>{formatCurrency(subscription.setup_fee)}</span></div>
+                  <div><span className={`status-pill status-pill--${subscription.status === "active" ? "active" : subscription.status === "trial" ? "trial" : "suspended"}`}>{subscriptionLabels[subscription.status]}</span></div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeSection === "features" && (
+          <section className="panel" id="features">
+            <div className="panel-heading"><div><span className="eyebrow">Feature Flags</span><h2>Recursos liberaveis por plano ou empresa</h2></div></div>
+            <div className="feature-grid">
+              {data.features.map((feature) => (
+                <article className="compact-card" key={feature.id}>
+                  <div className="card-title-row"><strong>{feature.name}</strong><span className={feature.active ? "status-dot status-dot--active" : "status-dot"} /></div>
+                  <code>{feature.key}</code>
+                  <p>{feature.description || "Sem descricao"}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeSection === "announcements" && (
+          <section className="panel" id="announcements">
+            <div className="panel-heading"><div><span className="eyebrow">Avisos Globais</span><h2>Mensagens para o topo do Sistema Clinica</h2></div></div>
+            <div className="announcement-layout">
+              <div className="responsive-list">
+                {data.announcements.map((announcement) => (
+                  <article className={`announcement-card announcement-card--${announcement.severity}`} key={announcement.id}>
+                    <div className="card-title-row">
+                      <span className="badge badge--announcement">{severityLabels[announcement.severity]}</span>
+                      <span className={announcement.active ? "status-pill status-pill--active" : "status-pill status-pill--inactive"}>{announcement.active ? "Ativo" : "Inativo"}</span>
+                    </div>
+                    <h3>{announcement.title || "Aviso"}</h3>
+                    <p>{announcement.message}</p>
+                    <small>{formatDate(announcement.starts_at)} ate {formatDate(announcement.ends_at)}</small>
+                    <button type="button" className="button button--secondary" disabled={saving} onClick={() => void toggleAnnouncement(announcement)}>{announcement.active ? "Desativar" : "Ativar"}</button>
+                  </article>
+                ))}
+              </div>
+              <form className="form-card" onSubmit={(event) => void createAnnouncement(event)}>
+                <span className="eyebrow">Configurar aviso</span>
+                <label>Titulo<input value={announcementForm.title} onChange={(event) => setAnnouncementForm((form) => ({ ...form, title: event.target.value }))} placeholder="Ex.: Manutencao programada" /></label>
+                <label>Mensagem<textarea rows={4} value={announcementForm.message} onChange={(event) => setAnnouncementForm((form) => ({ ...form, message: event.target.value }))} /></label>
+                <div className="form-grid form-grid--two">
+                  <label>Inicio<input type="datetime-local" value={announcementForm.startsAt} onChange={(event) => setAnnouncementForm((form) => ({ ...form, startsAt: event.target.value }))} /></label>
+                  <label>Fim<input type="datetime-local" value={announcementForm.endsAt} onChange={(event) => setAnnouncementForm((form) => ({ ...form, endsAt: event.target.value }))} /></label>
+                </div>
+                <label>Severidade<select value={announcementForm.severity} onChange={(event) => setAnnouncementForm((form) => ({ ...form, severity: event.target.value as AnnouncementSeverity }))}>{Object.entries(severityLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+                <label className="checkbox-row"><input type="checkbox" checked={announcementForm.active} onChange={(event) => setAnnouncementForm((form) => ({ ...form, active: event.target.checked }))} /> Publicar aviso ativo</label>
+                <button type="submit" className="button" disabled={saving}>Salvar aviso</button>
+              </form>
+            </div>
+          </section>
+        )}
+
+        {activeSection === "audit" && (
+          <section className="panel" id="audit">
+            <div className="panel-heading"><div><span className="eyebrow">Auditoria Administrativa</span><h2>Historico de alteracoes comerciais</h2></div></div>
+            <div className="audit-list">
+              {data.statusLogs.map((log) => (
+                <article key={log.id}>
+                  <span><Activity size={18} /></span>
+                  <div>
+                    <strong>{getCompanyName(data.companies, log.company_id)}: {log.previous_status ? statusLabels[log.previous_status] : "Novo"} - {statusLabels[log.new_status]}</strong>
+                    <p>{log.reason || "Sem justificativa registrada"}</p>
+                    <small>{formatDate(log.created_at)}</small>
+                  </div>
+                </article>
+              ))}
+              {!data.statusLogs.length && <p>Nenhum log administrativo registrado ainda.</p>}
+            </div>
+          </section>
+        )}
+
+        {activeSection === "settings" && (
+          <section className="panel" id="settings">
+            <div className="panel-heading"><div><span className="eyebrow">Configuracoes da Plataforma</span><h2>Preparacao segura para producao</h2></div></div>
+            <div className="settings-grid">
+              <article className="compact-card"><Sparkles size={22} /><strong>Billing readiness</strong><p>Valores, setup, extras e contratos estao modelados. Gateway de pagamento ainda nao foi integrado.</p></article>
+              <article className="compact-card"><ShieldCheck size={22} /><strong>Seguranca</strong><p>Admin separado usa Supabase Auth, RLS e permissao em platform_admin_users. Sem service_role no navegador.</p></article>
+              <article className="compact-card"><Flag size={22} /><strong>Features futuras</strong><p>Features prontas para liberacao por plano ou empresa, sem bloquear modulo clinico automaticamente nesta etapa.</p></article>
+            </div>
+          </section>
+        )}
       </section>
     </main>
   );
@@ -118,6 +1124,50 @@ on conflict (user_id) do update set
 
 export function App() {
   const [currentPath, setCurrentPath] = useState(() => normalizePath(window.location.pathname));
+  const [checking, setChecking] = useState(true);
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
+  const [blockMessage, setBlockMessage] = useState("");
+
+  const bootstrapAuth = useCallback(async () => {
+    if (!supabase) {
+      setChecking(false);
+      return;
+    }
+
+    setChecking(true);
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) throw error;
+
+      if (!data.session?.user) {
+        setSession(null);
+        setUser(null);
+        setAdminUser(null);
+        setBlockMessage("");
+        return;
+      }
+
+      const admin = await fetchAdminUser(supabase, data.session.user.id);
+      if (!admin) {
+        setBlockMessage(PLATFORM_ADMIN_DENIED_MESSAGE);
+        setSession(null);
+        setUser(null);
+        setAdminUser(null);
+        return;
+      }
+
+      setSession(data.session);
+      setUser(data.session.user);
+      setAdminUser(admin);
+      setBlockMessage("");
+    } catch (error) {
+      setBlockMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+    } finally {
+      setChecking(false);
+    }
+  }, []);
 
   useEffect(() => {
     const syncRoute = () => setCurrentPath(normalizePath(window.location.pathname));
@@ -129,17 +1179,61 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    void bootstrapAuth();
+  }, [bootstrapAuth]);
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!nextSession?.user) {
+        setSession(null);
+        setUser(null);
+        setAdminUser(null);
+        setBlockMessage("");
+        return;
+      }
+
+      void bootstrapAuth();
+    });
+
+    return () => data.subscription.unsubscribe();
+  }, [bootstrapAuth]);
+
+  async function handleLogout() {
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    setSession(null);
+    setUser(null);
+    setAdminUser(null);
+    setBlockMessage("");
+    navigateTo(adminRoutes.login);
+  }
+
+  function handleAuthenticated(nextSession: Session, nextUser: User, nextAdminUser: AdminUser) {
+    setSession(nextSession);
+    setUser(nextUser);
+    setAdminUser(nextAdminUser);
+    setBlockMessage("");
+  }
+
   if (currentPath === adminRoutes.setup) {
     return <InitialSetup />;
   }
 
-  return (
-    <>
-      <AdminLogin />
-      <div className="production-note" aria-label="Estado de producao">
-        <ShieldCheck size={16} />
-        <span>Sem modo demo, sem dados mockados e sem service_role no frontend.</span>
-      </div>
-    </>
-  );
+  if (checking) {
+    return <LoadingScreen />;
+  }
+
+  if (blockMessage) {
+    return <DeniedScreen message={blockMessage} onLogout={() => void handleLogout()} />;
+  }
+
+  if (!session || !user || !adminUser || currentPath === "/" || currentPath === adminRoutes.login) {
+    return <LoginScreen onAuthenticated={handleAuthenticated} />;
+  }
+
+  return <DashboardApp user={user} adminUser={adminUser} onLogout={() => void handleLogout()} />;
 }

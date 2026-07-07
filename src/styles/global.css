@@ -145,6 +145,23 @@ code {
   padding: 13px 14px;
 }
 
+.setup-status--danger {
+  background: #fef2f2;
+  border-color: rgba(185, 28, 28, 0.2);
+  color: var(--danger);
+}
+
+.setup-warning {
+  align-items: center;
+  background: #fffbeb;
+  border: 1px solid rgba(180, 83, 9, 0.2);
+  border-radius: 16px;
+  color: #92400e;
+  display: flex;
+  gap: 10px;
+  padding: 13px 14px;
+}
+
 .checkbox-row {
   align-items: center;
   display: flex;
@@ -337,6 +354,16 @@ small {
   white-space: nowrap;
 }
 
+.button svg {
+  flex: 0 0 auto;
+  margin-right: 7px;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+
 .button--secondary {
   background: #e9fbf7;
   border: 1px solid rgba(15, 118, 110, 0.18);
@@ -421,6 +448,10 @@ small {
 
 .form-grid--compact {
   grid-template-columns: repeat(4, minmax(150px, 1fr));
+}
+
+.form-grid--span {
+  grid-column: span 2;
 }
 
 .form-grid--two {
@@ -701,6 +732,7 @@ dd {
   .sidebar nav,
   .metric-grid,
   .setup-grid,
+  .form-grid--span,
   .form-grid--compact,
   .form-grid--two,
   .extras-grid,
