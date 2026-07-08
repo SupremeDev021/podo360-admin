@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Podo360 Admin" />
+    <title>Podo360 Admin</title>
+    <script>
+      (function () {
+        var base = "/podo360-admin";
+        var path = window.location.pathname;
+        var route = path.indexOf(base) === 0 ? path.slice(base.length) : path;
+        if (!route || route === "/") {
+          route = "/admin/login";
+        }
+        window.location.replace(base + "/#" + route + window.location.search);
+      })();
+    </script>
+  </head>
+  <body>
+    Redirecionando para o Podo360 Admin...
+  </body>
+</html>
