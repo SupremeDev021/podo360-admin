@@ -105,6 +105,7 @@ type PlatformSubscription = {
   status: SubscriptionStatus;
   monthly_price: number | null;
   setup_fee: number | null;
+  max_users?: number | null;
   starts_at: string | null;
   renews_at: string | null;
   contract_min_months: number;
@@ -162,6 +163,7 @@ type DashboardData = {
   leads: PlatformLead[];
   announcements: PlatformAnnouncement[];
   statusLogs: PlatformStatusLog[];
+  activeUserCounts: Record<string, number>;
 };
 
 type CompanyForm = {
@@ -291,7 +293,8 @@ const emptyDashboardData: DashboardData = {
   features: [],
   leads: [],
   announcements: [],
-  statusLogs: []
+  statusLogs: [],
+  activeUserCounts: {}
 };
 
 function escapeSql(value: string) {
@@ -335,6 +338,18 @@ function getCompanyName(companies: PlatformCompany[], companyId: string) {
   return company?.trading_name || company?.company_name || "Empresa nao vinculada";
 }
 
+function getActiveSubscription(subscriptions: PlatformSubscription[], companyId: string) {
+  return subscriptions.find((subscription) => subscription.company_id === companyId && ["active", "trial"].includes(subscription.status))
+    ?? subscriptions.find((subscription) => subscription.company_id === companyId)
+    ?? null;
+}
+
+function getCompanyUserLimit(company: PlatformCompany, plans: PlatformPlan[], subscriptions: PlatformSubscription[]) {
+  const subscription = getActiveSubscription(subscriptions, company.id);
+  if (subscription?.max_users !== undefined && subscription.max_users !== null) return subscription.max_users;
+  return plans.find((plan) => plan.id === company.plan_id)?.max_users ?? null;
+}
+
 function navigateTo(route: string) {
   window.history.pushState(null, "", toBrowserPath(route));
   window.dispatchEvent(new PopStateEvent("popstate"));
@@ -369,7 +384,8 @@ async function fetchDashboardData(client: SupabaseClient): Promise<DashboardData
     features,
     leads,
     announcements,
-    statusLogs
+    statusLogs,
+    profiles
   ] = await Promise.all([
     client.from("platform_plans").select("*").order("display_order", { ascending: true }),
     client.from("platform_plan_extras").select("*").order("created_at", { ascending: false }),
@@ -378,12 +394,20 @@ async function fetchDashboardData(client: SupabaseClient): Promise<DashboardData
     client.from("platform_features").select("*").order("key", { ascending: true }),
     client.from("platform_leads").select("*").order("created_at", { ascending: false }),
     client.from("platform_announcements").select("*").order("created_at", { ascending: false }),
-    client.from("platform_company_status_logs").select("*").order("created_at", { ascending: false }).limit(50)
+    client.from("platform_company_status_logs").select("*").order("created_at", { ascending: false }).limit(50),
+    client.from("profiles").select("company_id,active").eq("active", true)
   ]);
 
-  const responses = [plans, extras, companies, subscriptions, features, leads, announcements, statusLogs];
+  const responses = [plans, extras, companies, subscriptions, features, leads, announcements, statusLogs, profiles];
   const firstError = responses.find((response) => response.error)?.error;
   if (firstError) throw firstError;
+
+  const activeUserCounts = (profiles.data ?? []).reduce<Record<string, number>>((counts, profile) => {
+    const companyId = String(profile.company_id ?? "");
+    if (!companyId) return counts;
+    counts[companyId] = (counts[companyId] ?? 0) + 1;
+    return counts;
+  }, {});
 
   return {
     plans: (plans.data ?? []) as PlatformPlan[],
@@ -393,7 +417,8 @@ async function fetchDashboardData(client: SupabaseClient): Promise<DashboardData
     features: (features.data ?? []) as PlatformFeature[],
     leads: (leads.data ?? []) as PlatformLead[],
     announcements: (announcements.data ?? []) as PlatformAnnouncement[],
-    statusLogs: (statusLogs.data ?? []) as PlatformStatusLog[]
+    statusLogs: (statusLogs.data ?? []) as PlatformStatusLog[],
+    activeUserCounts
   };
 }
 
@@ -713,6 +738,61 @@ function DashboardApp({
     }
   }
 
+  async function updateCompanyUserLimit(company: PlatformCompany, rawValue: string) {
+    const trimmedValue = rawValue.trim();
+    const nextLimit = trimmedValue === "" ? null : Number(trimmedValue);
+    if (nextLimit !== null && (!Number.isInteger(nextLimit) || nextLimit < 0)) {
+      setActionMessage("Informe um limite de usuarios inteiro maior ou igual a zero, ou deixe vazio para ilimitado.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const subscription = getActiveSubscription(data.subscriptions, company.id);
+      const previousLimit = getCompanyUserLimit(company, data.plans, data.subscriptions);
+
+      if (subscription) {
+        const { error } = await client
+          .from("platform_company_subscriptions")
+          .update({ max_users: nextLimit, updated_at: new Date().toISOString() })
+          .eq("id", subscription.id);
+        if (error) throw error;
+      } else {
+        const { error } = await client.from("platform_company_subscriptions").insert({
+          company_id: company.id,
+          plan_id: company.plan_id,
+          status: company.status === "active" ? "active" : "trial",
+          monthly_price: null,
+          setup_fee: null,
+          max_users: nextLimit,
+          contract_min_months: 3
+        });
+        if (error) throw error;
+      }
+
+      await client.from("platform_admin_audit_logs").insert({
+        actor_user_id: user.id,
+        action: "company_user_limit_updated",
+        entity_type: "platform_company",
+        entity_id: company.id,
+        company_id: company.id,
+        metadata: {
+          previousLimit,
+          nextLimit,
+          clinicCompanyId: company.clinic_company_id
+        }
+      });
+
+      setActionMessage(`Limite de usuarios de ${company.trading_name || company.company_name} atualizado.`);
+      await loadData();
+    } catch (error) {
+      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function createPlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!planForm.name.trim() || !planForm.slug.trim()) {
@@ -963,7 +1043,25 @@ function DashboardApp({
                     <div><dt>Telefone</dt><dd>{company.responsible_phone || "Nao informado"}</dd></div>
                     <div><dt>Company clinica</dt><dd>{company.clinic_company_id || "Nao vinculada"}</dd></div>
                     <div><dt>Criada em</dt><dd>{formatDate(company.created_at)}</dd></div>
+                    <div><dt>Usuarios ativos</dt><dd>{company.clinic_company_id ? (data.activeUserCounts[company.clinic_company_id] ?? 0) : 0} / {getCompanyUserLimit(company, data.plans, data.subscriptions) ?? "Ilimitado"}</dd></div>
                   </dl>
+                  <form className="inline-limit-form" onSubmit={(event) => {
+                    event.preventDefault();
+                    const form = new FormData(event.currentTarget);
+                    void updateCompanyUserLimit(company, String(form.get("maxUsers") ?? ""));
+                  }}>
+                    <label>
+                      Limite de usuarios da clinica
+                      <input
+                        defaultValue={getCompanyUserLimit(company, data.plans, data.subscriptions) ?? ""}
+                        min={0}
+                        name="maxUsers"
+                        placeholder="Vazio = ilimitado"
+                        type="number"
+                      />
+                    </label>
+                    <button type="submit" className="button button--secondary" disabled={saving}>Salvar limite</button>
+                  </form>
                   <div className="card-actions">
                     <button type="button" className="button button--secondary" disabled={saving || company.status === "active"} onClick={() => void updateCompanyStatus(company, "active")}>Ativar</button>
                     <button type="button" className="button button--secondary" disabled={saving || company.status === "suspended"} onClick={() => void updateCompanyStatus(company, "suspended")}>Suspender</button>
