@@ -2,6 +2,14 @@
 
 Data: 13/07/2026
 
+## Atualizacao desta rodada
+
+- Mensagens tecnicas visiveis citando Supabase/RLS/tabelas internas foram substituidas por linguagem profissional.
+- Typecheck: aprovado.
+- Build: aprovado.
+- O E2E do Admin integrado no repo clinico validou bloqueio sem sessao, bloqueio de credenciais invalidas e bloqueio de usuario clinico comum.
+- O login automatizado do owner no Admin separado nao foi repetido nesta rodada porque as variaveis locais `PLAYWRIGHT_PLATFORM_ADMIN_EMAIL` e `PLAYWRIGHT_PLATFORM_ADMIN_PASSWORD` nao estao configuradas no ambiente atual.
+
 ## Status
 
 Admin Global funcionando e publicado no GitHub Pages, mas a liberacao final conjunta com o Podo360 clinico ainda depende da nova rodada E2E autenticada do sistema clinico apos corrigir as credenciais do Usuario B.

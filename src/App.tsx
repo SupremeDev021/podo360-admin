@@ -483,7 +483,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (session: Session, 
     }
 
     if (!isSupabaseConfigured) {
-      setMessage(import.meta.env.DEV ? "Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY." : ADMIN_UNAVAILABLE_MESSAGE);
+      setMessage(ADMIN_UNAVAILABLE_MESSAGE);
       return;
     }
 
@@ -584,7 +584,7 @@ function DashboardApp({
   const [data, setData] = useState<DashboardData>(emptyDashboardData);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [actionMessage, setActionMessage] = useState("Admin Global conectado ao Supabase oficial. Escolha uma tela do menu.");
+  const [actionMessage, setActionMessage] = useState("Admin Global conectado. Escolha uma tela do menu.");
   const [companyForm, setCompanyForm] = useState<CompanyForm>({
     companyName: "",
     tradingName: "",
@@ -618,7 +618,7 @@ function DashboardApp({
       const client = await requireSupabase();
       const nextData = await fetchDashboardData(client);
       setData(nextData);
-      setActionMessage("Dados reais carregados do Supabase.");
+      setActionMessage("Dados reais carregados com sucesso.");
     } catch (error) {
       setActionMessage(getAdminActionErrorMessage(error));
     } finally {
@@ -1050,7 +1050,7 @@ function DashboardApp({
 
         <div className="security-note">
           <ShieldCheck size={17} />
-          <span>Repositorio separado, dados reais por RLS e Supabase Auth. Sem chave secreta no frontend.</span>
+          <span>Ambiente administrativo separado, com dados reais e acesso protegido por permissoes.</span>
         </div>
       </aside>
 
@@ -1225,7 +1225,7 @@ function DashboardApp({
                       <label>E-mail de login<input name="email" placeholder="admin@clinica.com" type="email" /></label>
                       <label>Senha temporaria<input autoComplete="new-password" name="temporaryPassword" placeholder="Minimo 6 caracteres" type="password" /></label>
                       <p className="form-helper">
-                        O usuario sera criado no Supabase Auth e vinculado ao profile da Company clinica {company.clinic_company_id || "nao vinculada"}.
+                        O usuario sera criado com autenticacao real e vinculado a clinica {company.clinic_company_id || "nao vinculada"}.
                       </p>
                       <button type="submit" className="button button--secondary" disabled={saving || !company.clinic_company_id}>Criar admin da clinica</button>
                     </form>
@@ -1378,7 +1378,7 @@ function DashboardApp({
             <div className="panel-heading"><div><span className="eyebrow">Configuracoes da Plataforma</span><h2>Preparacao segura para producao</h2></div></div>
             <div className="settings-grid">
               <article className="compact-card"><Sparkles size={22} /><strong>Billing readiness</strong><p>Valores, setup, extras e contratos estao modelados. Gateway de pagamento ainda nao foi integrado.</p></article>
-            <article className="compact-card"><ShieldCheck size={22} /><strong>Seguranca</strong><p>Admin separado usa Supabase Auth, RLS e permissao em platform_admin_users. Sem chave secreta no navegador.</p></article>
+            <article className="compact-card"><ShieldCheck size={22} /><strong>Seguranca</strong><p>Admin separado usa autenticacao real e permissoes administrativas, sem expor credenciais no navegador.</p></article>
               <article className="compact-card"><Flag size={22} /><strong>Features futuras</strong><p>Features prontas para liberacao por plano ou empresa, sem bloquear modulo clinico automaticamente nesta etapa.</p></article>
             </div>
           </section>
