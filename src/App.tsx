@@ -95,6 +95,7 @@ type PlatformCompany = {
   created_at: string;
   activated_at: string | null;
   suspended_at: string | null;
+  cancelled_at: string | null;
 };
 
 type PlatformSubscription = {
@@ -344,6 +345,18 @@ function getCompanyUserLimit(company: PlatformCompany, plans: PlatformPlan[], su
   if (subscription?.max_users !== undefined && subscription.max_users !== null) return subscription.max_users;
   return plans.find((plan) => plan.id === company.plan_id)?.max_users ?? null;
 }
+
+const clinicAdminDefaultModules = [
+  "dashboard",
+  "ba-opening",
+  "attendances",
+  "attendance-management",
+  "patients",
+  "patient-profile",
+  "schedule",
+  "reports",
+  "settings"
+];
 
 function navigateTo(route: string) {
   window.history.pushState(null, "", toBrowserPath(route));
@@ -725,6 +738,156 @@ function DashboardApp({
     }
   }
 
+  async function updateCompanyDetails(company: PlatformCompany, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const companyName = String(form.get("companyName") ?? "").trim();
+    const tradingName = String(form.get("tradingName") ?? "").trim();
+    const responsibleName = String(form.get("responsibleName") ?? "").trim();
+    const responsibleEmail = String(form.get("responsibleEmail") ?? "").trim();
+    const responsiblePhone = String(form.get("responsiblePhone") ?? "").trim();
+    const cnpj = String(form.get("cnpj") ?? "").trim();
+    const status = String(form.get("status") ?? company.status) as CompanyStatus;
+    const planId = String(form.get("planId") ?? "").trim();
+
+    if (!companyName) {
+      setActionMessage("Informe a razao social da empresa antes de salvar.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const timestamp = new Date().toISOString();
+      const { error: platformError } = await client
+        .from("platform_companies")
+        .update({
+          company_name: companyName,
+          trading_name: tradingName || null,
+          responsible_name: responsibleName || null,
+          responsible_email: responsibleEmail || null,
+          responsible_phone: responsiblePhone || null,
+          cnpj: cnpj || null,
+          status,
+          plan_id: planId || null,
+          updated_at: timestamp,
+          activated_at: status === "active" ? (company.activated_at ?? timestamp) : company.activated_at,
+          suspended_at: status === "suspended" ? timestamp : company.suspended_at,
+          cancelled_at: status === "cancelled" ? timestamp : company.cancelled_at
+        })
+        .eq("id", company.id);
+
+      if (platformError) throw platformError;
+
+      if (company.clinic_company_id) {
+        const planStatus = status === "active" ? "active" : status === "trial" ? "trial" : "suspended";
+        const { error: clinicError } = await client
+          .from("companies")
+          .update({
+            legal_name: companyName,
+            document: cnpj || null,
+            contact_email: responsibleEmail || null,
+            contact_phone: responsiblePhone || null,
+            plan_status: planStatus,
+            blocked_at: ["inactive", "suspended", "cancelled"].includes(status) ? timestamp : null,
+            updated_at: timestamp
+          })
+          .eq("id", company.clinic_company_id);
+        if (clinicError) throw clinicError;
+
+        const { error: settingsError } = await client
+          .from("company_settings")
+          .update({
+            display_name: tradingName || companyName,
+            updated_at: timestamp
+          })
+          .eq("company_id", company.clinic_company_id);
+        if (settingsError) throw settingsError;
+      }
+
+      await client.from("platform_admin_audit_logs").insert({
+        actor_user_id: user.id,
+        action: "company_details_updated",
+        entity_type: "platform_company",
+        entity_id: company.id,
+        company_id: company.id,
+        metadata: {
+          clinicCompanyId: company.clinic_company_id,
+          previousStatus: company.status,
+          nextStatus: status
+        }
+      });
+
+      setActionMessage(`Dados de ${tradingName || companyName} atualizados.`);
+      await loadData();
+    } catch (error) {
+      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createClinicAdminUser(company: PlatformCompany, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const fullName = String(form.get("fullName") ?? "").trim();
+    const email = String(form.get("email") ?? "").trim();
+    const temporaryPassword = String(form.get("temporaryPassword") ?? "").trim();
+
+    if (!company.clinic_company_id) {
+      setActionMessage("Vincule a empresa a uma Company clinica antes de criar usuario.");
+      return;
+    }
+    if (!fullName || !email || !temporaryPassword) {
+      setActionMessage("Informe nome, e-mail e senha temporaria para criar o admin da clinica.");
+      return;
+    }
+    if (temporaryPassword.length < 6) {
+      setActionMessage("A senha temporaria deve ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const { data: result, error } = await client.functions.invoke("admin-create-company-user", {
+        body: {
+          companyId: company.clinic_company_id,
+          fullName,
+          email,
+          role: "company_admin",
+          active: true,
+          modules: clinicAdminDefaultModules,
+          temporaryPassword,
+          sendInviteEmail: false
+        }
+      });
+      if (error) throw error;
+      if (result?.error) throw new Error(String(result.error));
+
+      await client.from("platform_admin_audit_logs").insert({
+        actor_user_id: user.id,
+        action: "clinic_admin_user_created",
+        entity_type: "platform_company",
+        entity_id: company.id,
+        company_id: company.id,
+        metadata: {
+          clinicCompanyId: company.clinic_company_id,
+          createdUserId: result?.userId ?? null,
+          email
+        }
+      });
+
+      event.currentTarget.reset();
+      setActionMessage(`Admin da clinica criado para ${company.trading_name || company.company_name}.`);
+      await loadData();
+    } catch (error) {
+      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function createPlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!planForm.name.trim() || !planForm.slug.trim()) {
@@ -977,6 +1140,29 @@ function DashboardApp({
                     <div><dt>Criada em</dt><dd>{formatDate(company.created_at)}</dd></div>
                     <div><dt>Usuarios ativos</dt><dd>{company.clinic_company_id ? (data.activeUserCounts[company.clinic_company_id] ?? 0) : 0} / {getCompanyUserLimit(company, data.plans, data.subscriptions) ?? "Ilimitado"}</dd></div>
                   </dl>
+                  <details className="embedded-form">
+                    <summary>Editar dados da empresa</summary>
+                    <form className="form-grid form-grid--compact" onSubmit={(event) => void updateCompanyDetails(company, event)}>
+                      <label>Razao social<input defaultValue={company.company_name} name="companyName" /></label>
+                      <label>Nome fantasia<input defaultValue={company.trading_name ?? ""} name="tradingName" /></label>
+                      <label>Responsavel<input defaultValue={company.responsible_name ?? ""} name="responsibleName" /></label>
+                      <label>E-mail<input defaultValue={company.responsible_email ?? ""} name="responsibleEmail" type="email" /></label>
+                      <label>Telefone<input defaultValue={company.responsible_phone ?? ""} name="responsiblePhone" /></label>
+                      <label>CNPJ<input defaultValue={company.cnpj ?? ""} name="cnpj" /></label>
+                      <label>Status
+                        <select defaultValue={company.status} name="status">
+                          {Object.entries(statusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+                        </select>
+                      </label>
+                      <label>Plano
+                        <select defaultValue={company.plan_id ?? ""} name="planId">
+                          <option value="">Sem plano</option>
+                          {data.plans.map((plan) => <option value={plan.id} key={plan.id}>{plan.name}</option>)}
+                        </select>
+                      </label>
+                      <button type="submit" className="button button--secondary" disabled={saving}>Salvar dados</button>
+                    </form>
+                  </details>
                   <form className="inline-limit-form" onSubmit={(event) => {
                     event.preventDefault();
                     const form = new FormData(event.currentTarget);
@@ -994,6 +1180,18 @@ function DashboardApp({
                     </label>
                     <button type="submit" className="button button--secondary" disabled={saving}>Salvar limite</button>
                   </form>
+                  <details className="embedded-form">
+                    <summary>Criar admin da clinica</summary>
+                    <form className="form-grid form-grid--compact" onSubmit={(event) => void createClinicAdminUser(company, event)}>
+                      <label>Nome completo<input name="fullName" placeholder="Administrador da clinica" /></label>
+                      <label>E-mail de login<input name="email" placeholder="admin@clinica.com" type="email" /></label>
+                      <label>Senha temporaria<input autoComplete="new-password" name="temporaryPassword" placeholder="Minimo 6 caracteres" type="password" /></label>
+                      <p className="form-helper">
+                        O usuario sera criado no Supabase Auth e vinculado ao profile da Company clinica {company.clinic_company_id || "nao vinculada"}.
+                      </p>
+                      <button type="submit" className="button button--secondary" disabled={saving || !company.clinic_company_id}>Criar admin da clinica</button>
+                    </form>
+                  </details>
                   <div className="card-actions">
                     <button type="button" className="button button--secondary" disabled={saving || company.status === "active"} onClick={() => void updateCompanyStatus(company, "active")}>Ativar</button>
                     <button type="button" className="button button--secondary" disabled={saving || company.status === "suspended"} onClick={() => void updateCompanyStatus(company, "suspended")}>Suspender</button>

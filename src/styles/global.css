@@ -451,6 +451,29 @@ small {
   max-width: 180px;
 }
 
+.embedded-form {
+  background: rgba(15, 118, 110, 0.04);
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  border-radius: 18px;
+  padding: 12px;
+}
+
+.embedded-form summary {
+  color: var(--primary);
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.embedded-form form {
+  margin-top: 12px;
+}
+
+.form-helper {
+  color: var(--muted);
+  font-size: 0.84rem;
+  margin: 0;
+}
+
 .company-grid,
 .plan-grid,
 .extras-grid,
