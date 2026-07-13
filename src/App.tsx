@@ -10,7 +10,6 @@ import {
   CreditCard,
   Flag,
   Layers3,
-  LockKeyhole,
   LogOut,
   Mail,
   PackagePlus,
@@ -297,10 +296,6 @@ const emptyDashboardData: DashboardData = {
   activeUserCounts: {}
 };
 
-function escapeSql(value: string) {
-  return value.trim().replace(/'/g, "''");
-}
-
 function formatDate(value: string | null) {
   if (!value) return "A definir";
   return new Intl.DateTimeFormat("pt-BR", {
@@ -422,66 +417,6 @@ async function fetchDashboardData(client: SupabaseClient): Promise<DashboardData
   };
 }
 
-function InitialSetup() {
-  const [authUserId, setAuthUserId] = useState("");
-  const [email, setEmail] = useState("");
-  const [platformRole, setPlatformRole] = useState<AdminUser["role"]>("owner");
-
-  const sql = useMemo(() => {
-    const safeUserId = escapeSql(authUserId) || "<auth_user_id>";
-    return `insert into public.platform_admin_users (user_id, role, active)
-values ('${safeUserId}', '${platformRole}', true)
-on conflict (user_id) do update set
-  role = excluded.role,
-  active = true,
-  updated_at = now();`;
-  }, [authUserId, platformRole]);
-
-  return (
-    <main className="auth-shell">
-      <section className="auth-card auth-card--wide">
-        <span className="eyebrow">Setup seguro</span>
-        <h1>Primeiro Admin Global</h1>
-        <p>
-          Crie o usuario em Authentication, copie o User UID e use este assistente apenas para montar o vinculo em
-          <code>platform_admin_users</code>. Nenhuma senha deve ser colocada no codigo, em migration ou em documento.
-        </p>
-
-        <div className="setup-grid">
-          <label>
-            Auth user ID
-            <input value={authUserId} onChange={(event) => setAuthUserId(event.target.value)} placeholder="UUID do usuario criado no Auth" />
-          </label>
-          <label>
-            E-mail de referencia
-            <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="admin@podo360.com" />
-          </label>
-          <label>
-            Papel no Admin Global
-            <select value={platformRole} onChange={(event) => setPlatformRole(event.target.value as AdminUser["role"])}>
-              <option value="owner">Owner</option>
-              <option value="admin">Admin</option>
-              <option value="support">Suporte</option>
-              <option value="commercial">Comercial</option>
-            </select>
-          </label>
-        </div>
-
-        <pre className="sql-box">{sql}</pre>
-
-        <div className="setup-warning">
-          <LockKeyhole size={18} />
-          <span>Use este SQL somente no projeto correto. Nunca coloque senha neste arquivo ou no Git.</span>
-        </div>
-
-        <button type="button" className="button button--secondary" onClick={() => navigateTo(adminRoutes.login)}>
-          Ir para login
-        </button>
-      </section>
-    </main>
-  );
-}
-
 function LoginScreen({ onAuthenticated }: { onAuthenticated: (session: Session, user: User, adminUser: AdminUser) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -554,9 +489,6 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (session: Session, 
           {loading ? "Validando..." : "Entrar"}
         </button>
 
-        <button type="button" className="button button--secondary" onClick={() => navigateTo(adminRoutes.setup)}>
-          Setup do primeiro Admin Global
-        </button>
       </form>
     </main>
   );
@@ -916,8 +848,8 @@ function DashboardApp({
         </nav>
 
         <div className="security-note">
-          <LockKeyhole size={17} />
-          <span>Repositorio separado, dados reais por RLS e Supabase Auth. Sem service_role no frontend.</span>
+          <ShieldCheck size={17} />
+          <span>Repositorio separado, dados reais por RLS e Supabase Auth. Sem chave secreta no frontend.</span>
         </div>
       </aside>
 
@@ -1210,7 +1142,7 @@ function DashboardApp({
             <div className="panel-heading"><div><span className="eyebrow">Configuracoes da Plataforma</span><h2>Preparacao segura para producao</h2></div></div>
             <div className="settings-grid">
               <article className="compact-card"><Sparkles size={22} /><strong>Billing readiness</strong><p>Valores, setup, extras e contratos estao modelados. Gateway de pagamento ainda nao foi integrado.</p></article>
-              <article className="compact-card"><ShieldCheck size={22} /><strong>Seguranca</strong><p>Admin separado usa Supabase Auth, RLS e permissao em platform_admin_users. Sem service_role no navegador.</p></article>
+            <article className="compact-card"><ShieldCheck size={22} /><strong>Seguranca</strong><p>Admin separado usa Supabase Auth, RLS e permissao em platform_admin_users. Sem chave secreta no navegador.</p></article>
               <article className="compact-card"><Flag size={22} /><strong>Features futuras</strong><p>Features prontas para liberacao por plano ou empresa, sem bloquear modulo clinico automaticamente nesta etapa.</p></article>
             </div>
           </section>
@@ -1315,10 +1247,6 @@ export function App() {
     setUser(nextUser);
     setAdminUser(nextAdminUser);
     setBlockMessage("");
-  }
-
-  if (currentPath === adminRoutes.setup) {
-    return <InitialSetup />;
   }
 
   if (checking) {

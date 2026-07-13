@@ -2,7 +2,6 @@ export const ADMIN_BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, "");
 const USE_HASH_ROUTING = ADMIN_BASE_PATH.includes("podo360-admin");
 
 export const adminRoutes = {
-  setup: "/admin/setup",
   login: "/admin/login",
   dashboard: "/admin/dashboard",
   companies: "/admin/empresas",

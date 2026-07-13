@@ -112,10 +112,6 @@ code {
   width: 100%;
 }
 
-.auth-card--wide {
-  max-width: 920px;
-}
-
 .auth-card h1,
 .error-card h1 {
   font-size: clamp(1.8rem, 4vw, 2.8rem);
@@ -127,12 +123,6 @@ code {
 .error-card p {
   color: var(--muted);
   margin: 0;
-}
-
-.setup-grid {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .setup-status {
@@ -151,17 +141,6 @@ code {
   color: var(--danger);
 }
 
-.setup-warning {
-  align-items: center;
-  background: #fffbeb;
-  border: 1px solid rgba(180, 83, 9, 0.2);
-  border-radius: 16px;
-  color: #92400e;
-  display: flex;
-  gap: 10px;
-  padding: 13px 14px;
-}
-
 .checkbox-row {
   align-items: center;
   display: flex;
@@ -173,7 +152,6 @@ code {
   width: auto;
 }
 
-.sql-box,
 .error-card pre {
   background: #082f2d;
   border-radius: 18px;
@@ -746,7 +724,6 @@ dd {
 
   .sidebar nav,
   .metric-grid,
-  .setup-grid,
   .inline-limit-form,
   .form-grid--span,
   .form-grid--compact,
