@@ -325,6 +325,26 @@ function getErrorMessage(error: unknown) {
   return ADMIN_UNAVAILABLE_MESSAGE;
 }
 
+function getAdminActionErrorMessage(error: unknown) {
+  const record = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const message = getErrorMessage(error);
+  const normalized = message.toLowerCase();
+  const status = record.status ?? record.code;
+
+  if (
+    status === 401 ||
+    status === 403 ||
+    normalized.includes("jwt") ||
+    normalized.includes("permission denied") ||
+    normalized.includes("row-level security") ||
+    normalized.includes("violates row-level security")
+  ) {
+    return "Sua sessão administrativa expirou ou não possui permissão para esta ação. Saia e entre novamente com um usuário Admin Global ativo.";
+  }
+
+  return import.meta.env.DEV ? message : ADMIN_UNAVAILABLE_MESSAGE;
+}
+
 async function getFunctionErrorMessage(error: unknown) {
   const fallback = getErrorMessage(error);
   const context = (error as { context?: unknown })?.context;
@@ -600,7 +620,7 @@ function DashboardApp({
       setData(nextData);
       setActionMessage("Dados reais carregados do Supabase.");
     } catch (error) {
-      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+      setActionMessage(getAdminActionErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -662,7 +682,7 @@ function DashboardApp({
       setCompanyForm({ companyName: "", tradingName: "", responsibleName: "", responsibleEmail: "", responsiblePhone: "", cnpj: "", status: "trial", planId: "" });
       await loadData();
     } catch (error) {
-      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+      setActionMessage(getAdminActionErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -694,7 +714,7 @@ function DashboardApp({
       setActionMessage(`Status de ${company.trading_name || company.company_name} alterado para ${statusLabels[status]}.`);
       await loadData();
     } catch (error) {
-      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+      setActionMessage(getAdminActionErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -749,7 +769,7 @@ function DashboardApp({
       setActionMessage(`Limite de usuarios de ${company.trading_name || company.company_name} atualizado.`);
       await loadData();
     } catch (error) {
-      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+      setActionMessage(getAdminActionErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -979,7 +999,7 @@ function DashboardApp({
       setAnnouncementForm({ title: "", message: "", severity: "info", startsAt: "", endsAt: "", active: false });
       await loadData();
     } catch (error) {
-      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+      setActionMessage(getAdminActionErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -994,7 +1014,7 @@ function DashboardApp({
       setActionMessage(`Aviso ${announcement.active ? "desativado" : "ativado"}.`);
       await loadData();
     } catch (error) {
-      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+      setActionMessage(getAdminActionErrorMessage(error));
     } finally {
       setSaving(false);
     }
