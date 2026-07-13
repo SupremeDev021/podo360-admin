@@ -846,7 +846,8 @@ function DashboardApp({
 
   async function createClinicAdminUser(company: PlatformCompany, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const fullName = String(form.get("fullName") ?? "").trim();
     const email = String(form.get("email") ?? "").trim();
     const temporaryPassword = String(form.get("temporaryPassword") ?? "").trim();
@@ -895,7 +896,7 @@ function DashboardApp({
         }
       });
 
-      event.currentTarget.reset();
+      formElement.reset();
       setActionMessage(`Admin da clinica criado para ${company.trading_name || company.company_name}.`);
       await loadData();
     } catch (error) {
