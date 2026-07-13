@@ -325,6 +325,23 @@ function getErrorMessage(error: unknown) {
   return ADMIN_UNAVAILABLE_MESSAGE;
 }
 
+async function getFunctionErrorMessage(error: unknown) {
+  const fallback = getErrorMessage(error);
+  const context = (error as { context?: unknown })?.context;
+
+  if (context && typeof (context as Response).clone === "function") {
+    try {
+      const body = await (context as Response).clone().json() as { error?: unknown; message?: unknown };
+      const message = body.error ?? body.message;
+      if (typeof message === "string" && message.trim()) return message.trim();
+    } catch {
+      // Keep the fallback message when the function response is not JSON.
+    }
+  }
+
+  return fallback;
+}
+
 function getPlanName(plans: PlatformPlan[], planId: string | null) {
   return plans.find((plan) => plan.id === planId)?.name ?? "A definir";
 }
@@ -862,7 +879,7 @@ function DashboardApp({
           sendInviteEmail: false
         }
       });
-      if (error) throw error;
+      if (error) throw new Error(await getFunctionErrorMessage(error));
       if (result?.error) throw new Error(String(result.error));
 
       await client.from("platform_admin_audit_logs").insert({
@@ -882,7 +899,7 @@ function DashboardApp({
       setActionMessage(`Admin da clinica criado para ${company.trading_name || company.company_name}.`);
       await loadData();
     } catch (error) {
-      setActionMessage(import.meta.env.DEV ? getErrorMessage(error) : ADMIN_UNAVAILABLE_MESSAGE);
+      setActionMessage(getErrorMessage(error));
     } finally {
       setSaving(false);
     }
