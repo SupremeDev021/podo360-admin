@@ -43,8 +43,13 @@ Como o GitHub Pages nao faz rewrite de rotas SPA, o Admin usa hash routing em pr
 URLs principais:
 
 - `https://supremedev021.github.io/podo360-admin/#/admin/login`
-- `https://supremedev021.github.io/podo360-admin/#/admin/setup`
 - `https://supremedev021.github.io/podo360-admin/#/admin/dashboard`
+
+O owner inicial do Admin Global ja foi criado. Nao existe rota publica de setup
+para criar administradores em producao. Novos administradores devem ser criados
+por fluxo operacional controlado no Supabase/Auth e vinculados em
+`platform_admin_users` por SQL revisado, sem senha em codigo, migration ou
+documento.
 
 ## Limite de usuarios por clinica
 
