@@ -14,6 +14,7 @@ Ele e responsavel por:
 - Gestao dos planos Start, Clinic, Pro e Master.
 - Gestao de extras comerciais.
 - Controle administrativo de assinaturas e contratos.
+- Limite de usuarios ativos por clinica, conforme plano ou contrato.
 - Feature flags futuras.
 - Avisos globais para o Sistema Clinica.
 - Auditoria administrativa.
@@ -44,6 +45,24 @@ URLs principais:
 - `https://supremedev021.github.io/podo360-admin/#/admin/login`
 - `https://supremedev021.github.io/podo360-admin/#/admin/setup`
 - `https://supremedev021.github.io/podo360-admin/#/admin/dashboard`
+
+## Limite de usuarios por clinica
+
+A tela de Empresas permite definir o limite maximo de usuarios ativos da clinica.
+
+O valor e salvo em:
+
+```text
+public.platform_company_subscriptions.max_users
+```
+
+Regras:
+
+- campo vazio: ilimitado;
+- `0`: bloqueia novos usuarios ativos;
+- numero maior que `0`: limite contratado.
+
+O Sistema Clinica valida esse limite antes de convidar ou reativar usuarios.
 
 ## Seguranca
 
