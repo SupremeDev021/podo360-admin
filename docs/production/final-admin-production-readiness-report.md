@@ -39,3 +39,26 @@ Admin Global funcionando e publicado no GitHub Pages, mas a liberacao final conj
 
 - Rerodar fluxo completo autenticado do Podo360 clinico apos corrigir Usuario B.
 - Validar novamente o Admin publicado apos novo deploy da remocao do setup publico.
+
+## Correcao do Convite de Admin da Clinica - 14/07/2026
+
+Problema corrigido:
+
+- O formulario de criacao de admin da clinica pedia senha temporaria e podia deixar a operacao com feedback travado quando a chamada falhava.
+
+Correcao:
+
+- O formulario agora convida o admin da clinica por e-mail, sem senha temporaria no Admin Global.
+- O botao informa "Enviando convite..." durante a operacao e sempre libera o estado no `finally`.
+- A limpeza do formulario foi protegida para evitar falha de `reset()` apos operacao assincrona.
+- O convite usa a Edge Function `admin-create-company-user`, publicada com redirect de producao para `https://podo360.supremetechdev.com/`.
+
+Validacoes:
+
+- Typecheck: aprovado.
+- Build: aprovado.
+
+Pendencia operacional:
+
+- Reenviar convites antigos gerados antes da correcao.
+- Confirmar no painel Auth que os dominios finais estao listados nas Redirect URLs.

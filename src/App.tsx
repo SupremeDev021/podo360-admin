@@ -870,18 +870,17 @@ function DashboardApp({
     const form = new FormData(formElement);
     const fullName = String(form.get("fullName") ?? "").trim();
     const email = String(form.get("email") ?? "").trim();
-    const temporaryPassword = String(form.get("temporaryPassword") ?? "").trim();
 
     if (!company.clinic_company_id) {
       setActionMessage("Vincule a empresa a uma Company clinica antes de criar usuario.");
       return;
     }
-    if (!fullName || !email || !temporaryPassword) {
-      setActionMessage("Informe nome, e-mail e senha temporaria para criar o admin da clinica.");
+    if (!fullName || !email) {
+      setActionMessage("Informe nome e e-mail para convidar o admin da clinica.");
       return;
     }
-    if (temporaryPassword.length < 6) {
-      setActionMessage("A senha temporaria deve ter pelo menos 6 caracteres.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setActionMessage("Informe um e-mail valido para convidar o admin da clinica.");
       return;
     }
 
@@ -896,8 +895,7 @@ function DashboardApp({
           role: "company_admin",
           active: true,
           modules: clinicAdminDefaultModules,
-          temporaryPassword,
-          sendInviteEmail: false
+          sendInviteEmail: true
         }
       });
       if (error) throw new Error(await getFunctionErrorMessage(error));
@@ -916,11 +914,12 @@ function DashboardApp({
         }
       });
 
-      formElement.reset();
-      setActionMessage(`Admin da clinica criado para ${company.trading_name || company.company_name}.`);
+      if (formElement.isConnected) formElement.reset();
+      setActionMessage(`Convite de admin da clinica enviado para ${company.trading_name || company.company_name}.`);
       await loadData();
     } catch (error) {
-      setActionMessage(getErrorMessage(error));
+      const message = getErrorMessage(error);
+      setActionMessage(message || "Nao foi possivel criar o admin da clinica. Tente novamente.");
     } finally {
       setSaving(false);
     }
@@ -1223,11 +1222,10 @@ function DashboardApp({
                     <form className="form-grid form-grid--compact" onSubmit={(event) => void createClinicAdminUser(company, event)}>
                       <label>Nome completo<input name="fullName" placeholder="Administrador da clinica" /></label>
                       <label>E-mail de login<input name="email" placeholder="admin@clinica.com" type="email" /></label>
-                      <label>Senha temporaria<input autoComplete="new-password" name="temporaryPassword" placeholder="Minimo 6 caracteres" type="password" /></label>
                       <p className="form-helper">
-                        O usuario sera criado com autenticacao real e vinculado a clinica {company.clinic_company_id || "nao vinculada"}.
+                        O usuario recebera um convite seguro por e-mail e ficara vinculado a clinica {company.clinic_company_id || "nao vinculada"}.
                       </p>
-                      <button type="submit" className="button button--secondary" disabled={saving || !company.clinic_company_id}>Criar admin da clinica</button>
+                      <button type="submit" className="button button--secondary" disabled={saving || !company.clinic_company_id}>{saving ? "Enviando convite..." : "Convidar admin da clinica"}</button>
                     </form>
                   </details>
                   <div className="card-actions">
