@@ -31,6 +31,7 @@ const PLATFORM_ADMIN_DENIED_MESSAGE =
 
 type SectionId =
   | "dashboard"
+  | "client-registrations"
   | "leads"
   | "companies"
   | "plans"
@@ -46,6 +47,7 @@ type LeadStatus = "new" | "contacted" | "qualified" | "converted" | "lost" | "sp
 type SubscriptionStatus = "active" | "trial" | "past_due" | "suspended" | "cancelled";
 type BillingType = "monthly" | "one_time" | "project";
 type AnnouncementSeverity = "info" | "warning" | "maintenance" | "critical";
+type ClientRegistrationStatus = "pending" | "in_review" | "approved" | "rejected" | "need_more_info" | "converted";
 
 type AdminUser = {
   user_id: string;
@@ -133,6 +135,40 @@ type PlatformLead = {
   created_at: string;
 };
 
+type ClientRegistrationRequest = {
+  id: string;
+  clinic_name: string;
+  document_cnpj: string | null;
+  clinic_type: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+  website_or_instagram: string | null;
+  responsible_name: string;
+  responsible_document: string | null;
+  responsible_email: string;
+  responsible_phone: string | null;
+  responsible_role: string | null;
+  desired_admin_name: string | null;
+  desired_admin_email: string | null;
+  interested_plan: string | null;
+  estimated_users: number | null;
+  estimated_professionals: number | null;
+  wants_white_label: boolean;
+  source: string | null;
+  source_campaign: string | null;
+  notes: string | null;
+  status: ClientRegistrationStatus;
+  admin_notes: string | null;
+  approved_company_id: string | null;
+  approved_platform_company_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type PlatformAnnouncement = {
   id: string;
   title: string | null;
@@ -161,6 +197,7 @@ type DashboardData = {
   subscriptions: PlatformSubscription[];
   features: PlatformFeature[];
   leads: PlatformLead[];
+  clientRegistrationRequests: ClientRegistrationRequest[];
   announcements: PlatformAnnouncement[];
   statusLogs: PlatformStatusLog[];
   activeUserCounts: Record<string, number>;
@@ -197,6 +234,7 @@ type AnnouncementForm = {
 
 const navigationItems: Array<{ id: SectionId; label: string; icon: typeof BarChart3; route: string }> = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3, route: adminRoutes.dashboard },
+  { id: "client-registrations", label: "Solicitacoes de Cadastro", icon: ClipboardList, route: adminRoutes.clientRegistrations },
   { id: "leads", label: "Leads", icon: Mail, route: "/admin/leads" },
   { id: "companies", label: "Empresas", icon: Building2, route: adminRoutes.companies },
   { id: "plans", label: "Planos", icon: Layers3, route: adminRoutes.plans },
@@ -214,6 +252,10 @@ const sectionCopy: Record<SectionId, { title: string; description: string }> = {
   dashboard: {
     title: "Dashboard administrativo da plataforma.",
     description: "Visao executiva de empresas, leads, receita mapeada e pontos de atencao."
+  },
+  "client-registrations": {
+    title: "Solicitacoes de cadastro de clientes.",
+    description: "Analise cadastros enviados pelo formulario publico antes de liberar uma nova clinica."
   },
   leads: {
     title: "Leads comerciais.",
@@ -285,6 +327,15 @@ const severityLabels: Record<AnnouncementSeverity, string> = {
   critical: "Critico"
 };
 
+const clientRegistrationLabels: Record<ClientRegistrationStatus, string> = {
+  pending: "Pendente",
+  in_review: "Em analise",
+  approved: "Aprovado",
+  rejected: "Reprovado",
+  need_more_info: "Precisa de ajuste",
+  converted: "Convertido"
+};
+
 const emptyDashboardData: DashboardData = {
   plans: [],
   extras: [],
@@ -292,6 +343,7 @@ const emptyDashboardData: DashboardData = {
   subscriptions: [],
   features: [],
   leads: [],
+  clientRegistrationRequests: [],
   announcements: [],
   statusLogs: [],
   activeUserCounts: {}
@@ -428,6 +480,7 @@ async function fetchDashboardData(client: SupabaseClient): Promise<DashboardData
     subscriptions,
     features,
     leads,
+    clientRegistrationRequests,
     announcements,
     statusLogs,
     profiles
@@ -438,12 +491,13 @@ async function fetchDashboardData(client: SupabaseClient): Promise<DashboardData
     client.from("platform_company_subscriptions").select("*").order("created_at", { ascending: false }),
     client.from("platform_features").select("*").order("key", { ascending: true }),
     client.from("platform_leads").select("*").order("created_at", { ascending: false }),
+    client.from("platform_client_registration_requests").select("*").order("created_at", { ascending: false }),
     client.from("platform_announcements").select("*").order("created_at", { ascending: false }),
     client.from("platform_company_status_logs").select("*").order("created_at", { ascending: false }).limit(50),
     client.from("profiles").select("company_id,active").eq("active", true)
   ]);
 
-  const responses = [plans, extras, companies, subscriptions, features, leads, announcements, statusLogs, profiles];
+  const responses = [plans, extras, companies, subscriptions, features, leads, clientRegistrationRequests, announcements, statusLogs, profiles];
   const firstError = responses.find((response) => response.error)?.error;
   if (firstError) throw firstError;
 
@@ -461,6 +515,7 @@ async function fetchDashboardData(client: SupabaseClient): Promise<DashboardData
     subscriptions: (subscriptions.data ?? []) as PlatformSubscription[],
     features: (features.data ?? []) as PlatformFeature[],
     leads: (leads.data ?? []) as PlatformLead[],
+    clientRegistrationRequests: (clientRegistrationRequests.data ?? []) as ClientRegistrationRequest[],
     announcements: (announcements.data ?? []) as PlatformAnnouncement[],
     statusLogs: (statusLogs.data ?? []) as PlatformStatusLog[],
     activeUserCounts
@@ -643,6 +698,7 @@ function DashboardApp({
   const activeCompanies = data.companies.filter((company) => company.status === "active").length;
   const blockedCompanies = data.companies.filter((company) => ["inactive", "suspended", "cancelled"].includes(company.status)).length;
   const pendingLeads = data.leads.filter((lead) => lead.status === "new" || lead.status === "qualified").length;
+  const pendingRegistrations = data.clientRegistrationRequests.filter((request) => ["pending", "in_review", "need_more_info"].includes(request.status)).length;
   const recurringRevenue = data.subscriptions
     .filter((subscription) => subscription.status === "active" || subscription.status === "trial")
     .reduce((total, subscription) => total + Number(subscription.monthly_price ?? 0), 0);
@@ -925,6 +981,201 @@ function DashboardApp({
     }
   }
 
+  async function updateClientRegistrationStatus(request: ClientRegistrationRequest, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const status = String(form.get("status") ?? request.status) as ClientRegistrationStatus;
+    const adminNotes = String(form.get("adminNotes") ?? "").trim();
+
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const { error } = await client
+        .from("platform_client_registration_requests")
+        .update({
+          status,
+          admin_notes: adminNotes || null,
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString()
+        })
+        .eq("id", request.id);
+      if (error) throw error;
+
+      await client.from("platform_admin_audit_logs").insert({
+        actor_user_id: user.id,
+        action: "client_registration_status_updated",
+        entity_type: "platform_client_registration_request",
+        entity_id: request.id,
+        metadata: {
+          previousStatus: request.status,
+          nextStatus: status,
+          clinicName: request.clinic_name
+        }
+      });
+
+      setActionMessage(`Solicitacao de ${request.clinic_name} atualizada para ${clientRegistrationLabels[status]}.`);
+      await loadData();
+    } catch (error) {
+      setActionMessage(getAdminActionErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function convertClientRegistration(request: ClientRegistrationRequest, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (request.approved_company_id || request.approved_platform_company_id || request.status === "converted") {
+      setActionMessage("Esta solicitacao ja foi convertida em clinica.");
+      return;
+    }
+
+    const form = new FormData(event.currentTarget);
+    const planId = String(form.get("planId") ?? "").trim();
+    const status = String(form.get("status") ?? "trial") as CompanyStatus;
+    const maxUsersValue = String(form.get("maxUsers") ?? "").trim();
+    const maxUsers = maxUsersValue === "" ? null : Number(maxUsersValue);
+    const adminName = String(form.get("adminName") ?? "").trim();
+    const adminEmail = String(form.get("adminEmail") ?? "").trim();
+    const adminNotes = String(form.get("adminNotes") ?? "").trim();
+
+    if (maxUsers !== null && (!Number.isInteger(maxUsers) || maxUsers < 0)) {
+      setActionMessage("Informe um limite de usuarios inteiro maior ou igual a zero, ou deixe vazio para ilimitado.");
+      return;
+    }
+    if (adminEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) {
+      setActionMessage("Informe um e-mail valido para convidar o admin da clinica.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const timestamp = new Date().toISOString();
+      const plan = data.plans.find((item) => item.id === planId) ?? null;
+      const planStatus = status === "active" ? "active" : status === "trial" ? "trial" : "suspended";
+
+      const { data: clinicCompany, error: clinicError } = await client
+        .from("companies")
+        .insert({
+          name: request.clinic_name,
+          legal_name: request.clinic_name,
+          document: request.document_cnpj,
+          contact_email: request.email ?? request.responsible_email,
+          contact_phone: request.phone ?? request.responsible_phone,
+          plan_id: planId || null,
+          plan_status: planStatus,
+          blocked_at: ["inactive", "suspended", "cancelled"].includes(status) ? timestamp : null
+        })
+        .select("id")
+        .single();
+      if (clinicError) throw clinicError;
+
+      const clinicCompanyId = String(clinicCompany.id);
+
+      const { error: settingsError } = await client.from("company_settings").insert({
+        company_id: clinicCompanyId,
+        display_name: request.clinic_name,
+        commercial_data: {
+          registrationRequestId: request.id,
+          clinicType: request.clinic_type,
+          address: request.address,
+          city: request.city,
+          state: request.state,
+          zipCode: request.zip_code,
+          websiteOrInstagram: request.website_or_instagram,
+          source: request.source,
+          sourceCampaign: request.source_campaign
+        }
+      });
+      if (settingsError) throw settingsError;
+
+      const { data: platformCompany, error: platformError } = await client
+        .from("platform_companies")
+        .insert({
+          clinic_company_id: clinicCompanyId,
+          company_name: request.clinic_name,
+          trading_name: request.clinic_name,
+          cnpj: request.document_cnpj,
+          responsible_name: request.responsible_name,
+          responsible_email: request.responsible_email,
+          responsible_phone: request.responsible_phone,
+          status,
+          plan_id: planId || null,
+          activated_at: status === "active" ? timestamp : null,
+          suspended_at: status === "suspended" ? timestamp : null,
+          cancelled_at: status === "cancelled" ? timestamp : null
+        })
+        .select("id")
+        .single();
+      if (platformError) throw platformError;
+
+      const platformCompanyId = String(platformCompany.id);
+
+      const { error: subscriptionError } = await client.from("platform_company_subscriptions").insert({
+        company_id: platformCompanyId,
+        plan_id: planId || null,
+        status: status === "active" ? "active" : status === "trial" ? "trial" : "suspended",
+        monthly_price: plan?.monthly_price ?? null,
+        setup_fee: plan?.setup_fee ?? null,
+        max_users: maxUsers,
+        starts_at: new Date().toISOString().slice(0, 10),
+        contract_min_months: 3,
+        notes: `Criada a partir da solicitacao publica ${request.id}.`
+      });
+      if (subscriptionError) throw subscriptionError;
+
+      await client
+        .from("platform_client_registration_requests")
+        .update({
+          status: "converted",
+          admin_notes: adminNotes || request.admin_notes,
+          reviewed_by: user.id,
+          reviewed_at: timestamp,
+          approved_company_id: clinicCompanyId,
+          approved_platform_company_id: platformCompanyId
+        })
+        .eq("id", request.id);
+
+      if (adminName && adminEmail) {
+        const { data: result, error } = await client.functions.invoke("admin-create-company-user", {
+          body: {
+            companyId: clinicCompanyId,
+            fullName: adminName,
+            email: adminEmail,
+            role: "company_admin",
+            active: true,
+            modules: clinicAdminDefaultModules,
+            sendInviteEmail: true
+          }
+        });
+        if (error) throw new Error(await getFunctionErrorMessage(error));
+        if (result?.error) throw new Error(String(result.error));
+      }
+
+      await client.from("platform_admin_audit_logs").insert({
+        actor_user_id: user.id,
+        action: "client_registration_converted",
+        entity_type: "platform_client_registration_request",
+        entity_id: request.id,
+        company_id: platformCompanyId,
+        metadata: {
+          clinicCompanyId,
+          platformCompanyId,
+          planId: planId || null,
+          maxUsers,
+          invitedClinicAdmin: Boolean(adminName && adminEmail)
+        }
+      });
+
+      setActionMessage(`Solicitacao de ${request.clinic_name} convertida em clinica.`);
+      await loadData();
+    } catch (error) {
+      setActionMessage(getAdminActionErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function createPlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!planForm.name.trim() || !planForm.slug.trim()) {
@@ -1096,14 +1347,109 @@ function DashboardApp({
             </article>
             <article className="metric-card">
               <span><Users size={20} /></span>
-              <strong>{pendingLeads}</strong>
-              <small>Leads para acompanhar</small>
+              <strong>{pendingRegistrations}</strong>
+              <small>Cadastros para analisar</small>
             </article>
             <article className="metric-card metric-card--wide">
               <span><CreditCard size={20} /></span>
               <strong>{formatCurrency(recurringRevenue)}</strong>
               <small>Receita mensal mapeada</small>
             </article>
+          </section>
+        )}
+
+        {activeSection === "client-registrations" && (
+          <section className="panel" id="client-registrations">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">Cadastro Cliente</span>
+                <h2>Solicitacoes enviadas pelo formulario publico</h2>
+              </div>
+            </div>
+
+            <div className="request-grid">
+              {data.clientRegistrationRequests.map((request) => (
+                <article className="company-card" key={request.id}>
+                  <div className="card-title-row">
+                    <span className={`badge badge--${request.status}`}>{clientRegistrationLabels[request.status]}</span>
+                    <small>{formatDate(request.created_at)}</small>
+                  </div>
+                  <div>
+                    <h3>{request.clinic_name}</h3>
+                    <p>{request.responsible_name} - {request.responsible_email}</p>
+                  </div>
+                  <dl>
+                    <div><dt>CNPJ</dt><dd>{request.document_cnpj || "Nao informado"}</dd></div>
+                    <div><dt>Telefone</dt><dd>{request.phone || request.responsible_phone || "Nao informado"}</dd></div>
+                    <div><dt>Cidade/UF</dt><dd>{[request.city, request.state].filter(Boolean).join(" / ") || "Nao informado"}</dd></div>
+                    <div><dt>Plano de interesse</dt><dd>{request.interested_plan || "Nao informado"}</dd></div>
+                    <div><dt>Usuarios estimados</dt><dd>{request.estimated_users ?? "Nao informado"}</dd></div>
+                    <div><dt>Profissionais</dt><dd>{request.estimated_professionals ?? "Nao informado"}</dd></div>
+                    <div><dt>Origem</dt><dd>{request.source || "Direto"}</dd></div>
+                    <div><dt>Campanha</dt><dd>{request.source_campaign || "Nao informada"}</dd></div>
+                  </dl>
+                  {request.notes && <p className="form-helper">{request.notes}</p>}
+                  {request.admin_notes && <p className="form-helper"><strong>Nota interna:</strong> {request.admin_notes}</p>}
+
+                  <details className="embedded-form">
+                    <summary>Analisar solicitacao</summary>
+                    <form className="form-grid form-grid--compact" onSubmit={(event) => void updateClientRegistrationStatus(request, event)}>
+                      <label>Status
+                        <select defaultValue={request.status} name="status">
+                          {Object.entries(clientRegistrationLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+                        </select>
+                      </label>
+                      <label className="form-grid--span">Observacao interna
+                        <textarea defaultValue={request.admin_notes ?? ""} name="adminNotes" rows={3} />
+                      </label>
+                      <button type="submit" className="button button--secondary" disabled={saving}>Salvar analise</button>
+                    </form>
+                  </details>
+
+                  <details className="embedded-form">
+                    <summary>Converter em clinica</summary>
+                    <form className="form-grid form-grid--compact" onSubmit={(event) => void convertClientRegistration(request, event)}>
+                      <label>Status inicial
+                        <select defaultValue="trial" name="status">
+                          <option value="trial">Trial</option>
+                          <option value="active">Ativa</option>
+                          <option value="suspended">Suspensa</option>
+                        </select>
+                      </label>
+                      <label>Plano
+                        <select defaultValue={data.plans.find((plan) => plan.slug === request.interested_plan)?.id ?? ""} name="planId">
+                          <option value="">Sem plano</option>
+                          {data.plans.map((plan) => <option value={plan.id} key={plan.id}>{plan.name}</option>)}
+                        </select>
+                      </label>
+                      <label>Limite de usuarios
+                        <input defaultValue={request.estimated_users ?? ""} min={0} name="maxUsers" placeholder="Vazio = ilimitado" type="number" />
+                      </label>
+                      <label>Nome do admin
+                        <input defaultValue={request.desired_admin_name ?? request.responsible_name} name="adminName" />
+                      </label>
+                      <label>E-mail do admin
+                        <input defaultValue={request.desired_admin_email ?? request.responsible_email} name="adminEmail" type="email" />
+                      </label>
+                      <label className="form-grid--span">Observacao da conversao
+                        <textarea defaultValue={request.admin_notes ?? ""} name="adminNotes" rows={3} />
+                      </label>
+                      <p className="form-helper form-grid--span">
+                        A conversao cria a clinica, configura a assinatura e envia convite seguro para o admin informado.
+                      </p>
+                      <button
+                        type="submit"
+                        className="button"
+                        disabled={saving || request.status === "converted" || Boolean(request.approved_company_id)}
+                      >
+                        Converter em clinica
+                      </button>
+                    </form>
+                  </details>
+                </article>
+              ))}
+              {!data.clientRegistrationRequests.length && <p>Nenhuma solicitacao de cadastro recebida ainda.</p>}
+            </div>
           </section>
         )}
 

@@ -62,3 +62,37 @@ Pendencia operacional:
 
 - Reenviar convites antigos gerados antes da correcao.
 - Confirmar no painel Auth que os dominios finais estao listados nas Redirect URLs.
+
+## Cadastro publico de clientes - 20/07/2026
+
+Implementado novo fluxo sem substituir telas existentes do Admin Global.
+
+Entregas:
+
+- Criada tabela `platform_client_registration_requests` para receber cadastros publicos.
+- RLS aplicada: usuario anonimo apenas insere; nao lista, nao atualiza e nao apaga.
+- Admin Global ativo pode listar e atualizar solicitacoes.
+- Adicionada tela `Solicitacoes de Cadastro` no menu do Admin.
+- A tela permite analisar solicitacoes, alterar status, salvar observacao interna e converter cadastro em clinica.
+- Conversao cria `companies`, `company_settings`, `platform_companies` e `platform_company_subscriptions`.
+- Conversao permite definir plano, status inicial, limite de usuarios e convidar o admin da clinica.
+- Auditoria registrada em `platform_admin_audit_logs`.
+
+Correcao estrutural incluida:
+
+- Adicionada coluna `max_users` em `platform_company_subscriptions`, usada pelo limite de usuarios da clinica.
+- Adicionadas policies restritas para Admin Global criar/atualizar `companies` e `company_settings` durante conversao.
+
+Validacoes:
+
+- Typecheck do Admin: aprovado.
+- Build do Admin: aprovado.
+- Teste transacional com rollback confirmou que `anon` consegue inserir solicitacao, mas nao consegue listar.
+- Teste transacional com rollback confirmou que Admin Global consegue criar os registros principais de conversao.
+
+Erro atual de conexao no dominio customizado:
+
+- Causa encontrada: o bundle servido em `https://podoadmin360.supremetechdev.com/` foi gerado sem `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.
+- GitHub Pages estava correto, com secrets configurados.
+- Tentativa de envio do build corrigido para o servidor via Tailscale falhou por timeout no SSH em `100.84.50.104`.
+- Pendencia operacional: restabelecer SSH/Tailscale do servidor e publicar novamente o build do Admin no Nginx, ou apontar o dominio para o deploy GitHub Pages funcional.

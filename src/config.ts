@@ -4,6 +4,7 @@ const USE_HASH_ROUTING = ADMIN_BASE_PATH.includes("podo360-admin");
 export const adminRoutes = {
   login: "/admin/login",
   dashboard: "/admin/dashboard",
+  clientRegistrations: "/admin/solicitacoes-cadastro",
   companies: "/admin/empresas",
   plans: "/admin/planos",
   extras: "/admin/extras",
