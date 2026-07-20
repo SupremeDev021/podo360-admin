@@ -9,6 +9,7 @@ build
 .env.*.local
 .DS_Store
 *.log
+*.tar
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

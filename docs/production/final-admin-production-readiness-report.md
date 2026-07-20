@@ -96,3 +96,12 @@ Erro atual de conexao no dominio customizado:
 - GitHub Pages estava correto, com secrets configurados.
 - Tentativa de envio do build corrigido para o servidor via Tailscale falhou por timeout no SSH em `100.84.50.104`.
 - Pendencia operacional: restabelecer SSH/Tailscale do servidor e publicar novamente o build do Admin no Nginx, ou apontar o dominio para o deploy GitHub Pages funcional.
+
+Atualizacao operacional:
+
+- SSH local em `192.168.1.94` funcionou com o usuario `supremetech`.
+- O root real do Admin foi identificado em `/home/supremetech/podo360-sites/admin`.
+- Backup criado em `/home/supremetech/podo360-sites/admin.backup.20260720-admin-before-env-fix`.
+- Novo build de producao publicado no root do Admin.
+- Dominio `https://podoadmin360.supremetechdev.com/` validado carregando o bundle novo com variaveis publicas corretas.
+- Bundle publicado contem `Solicitacoes de Cadastro` e nao contem link publico de setup.
