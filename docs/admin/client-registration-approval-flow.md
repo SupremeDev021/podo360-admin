@@ -26,7 +26,13 @@ Ao converter uma solicitacao, o Admin Global confirma:
 - limite de usuarios;
 - nome e e-mail do admin da clinica.
 
-O sistema cria os registros comerciais e clinicos necessarios e pode enviar convite seguro para o admin da clinica.
+O sistema cria os registros comerciais e clinicos necessarios e gera um link seguro para o cliente definir a propria senha.
+
+O catalogo comercial (`platform_plans`) e diferente do catalogo clinico (`plans`). A conversao relaciona o plano clinico apenas quando existe o mesmo `slug`; o plano e o limite contratados permanecem na assinatura comercial.
+
+Depois da conversao, use **Acesso do cliente** para gerar, copiar, reenviar ou cancelar o link e acompanhar seu estado.
+
+Consulte `docs/admin/client-access-invite-flow.md`.
 
 ## Seguranca
 

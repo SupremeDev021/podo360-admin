@@ -584,6 +584,7 @@ dd {
 .badge--new,
 .badge--qualified,
 .badge--pending,
+.badge--processing,
 .badge--in_review,
 .badge--need_more_info,
 .status-pill--trial {
@@ -594,6 +595,7 @@ dd {
 .badge--contacted,
 .badge--approved,
 .badge--converted,
+.badge--used,
 .status-pill--active {
   background: #dcfce7;
   color: var(--success);
@@ -606,6 +608,8 @@ dd {
 
 .badge--lost,
 .badge--rejected,
+.badge--expired,
+.badge--cancelled,
 .status-pill--inactive,
 .status-pill--cancelled,
 .status-pill--suspended {
@@ -617,6 +621,18 @@ dd {
 .plan-chip {
   background: #eef2ff;
   color: #3730a3;
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.button--danger {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: var(--danger);
 }
 
 .status-dot {
