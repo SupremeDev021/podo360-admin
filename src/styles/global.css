@@ -478,13 +478,15 @@ small {
 .plan-grid,
 .extras-grid,
 .feature-grid,
-.settings-grid {
+.settings-grid,
+.request-grid {
   display: grid;
   gap: 16px;
 }
 
 .company-grid,
-.plan-grid {
+.plan-grid,
+.request-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -581,12 +583,19 @@ dd {
 
 .badge--new,
 .badge--qualified,
+.badge--pending,
+.badge--processing,
+.badge--in_review,
+.badge--need_more_info,
 .status-pill--trial {
   background: #fef3c7;
   color: #92400e;
 }
 
 .badge--contacted,
+.badge--approved,
+.badge--converted,
+.badge--used,
 .status-pill--active {
   background: #dcfce7;
   color: var(--success);
@@ -598,6 +607,9 @@ dd {
 }
 
 .badge--lost,
+.badge--rejected,
+.badge--expired,
+.badge--cancelled,
 .status-pill--inactive,
 .status-pill--cancelled,
 .status-pill--suspended {
@@ -609,6 +621,18 @@ dd {
 .plan-chip {
   background: #eef2ff;
   color: #3730a3;
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.button--danger {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: var(--danger);
 }
 
 .status-dot {

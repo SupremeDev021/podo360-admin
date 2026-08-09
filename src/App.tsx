@@ -31,6 +31,7 @@ const PLATFORM_ADMIN_DENIED_MESSAGE =
 
 type SectionId =
   | "dashboard"
+  | "client-registrations"
   | "leads"
   | "companies"
   | "plans"
@@ -46,6 +47,7 @@ type LeadStatus = "new" | "contacted" | "qualified" | "converted" | "lost" | "sp
 type SubscriptionStatus = "active" | "trial" | "past_due" | "suspended" | "cancelled";
 type BillingType = "monthly" | "one_time" | "project";
 type AnnouncementSeverity = "info" | "warning" | "maintenance" | "critical";
+type ClientRegistrationStatus = "pending" | "in_review" | "approved" | "rejected" | "need_more_info" | "converted";
 
 type AdminUser = {
   user_id: string;
@@ -133,6 +135,54 @@ type PlatformLead = {
   created_at: string;
 };
 
+type ClientRegistrationRequest = {
+  id: string;
+  clinic_name: string;
+  document_cnpj: string | null;
+  clinic_type: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+  website_or_instagram: string | null;
+  responsible_name: string;
+  responsible_document: string | null;
+  responsible_email: string;
+  responsible_phone: string | null;
+  responsible_role: string | null;
+  desired_admin_name: string | null;
+  desired_admin_email: string | null;
+  interested_plan: string | null;
+  estimated_users: number | null;
+  estimated_professionals: number | null;
+  wants_white_label: boolean;
+  source: string | null;
+  source_campaign: string | null;
+  notes: string | null;
+  status: ClientRegistrationStatus;
+  admin_notes: string | null;
+  approved_company_id: string | null;
+  approved_platform_company_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ClientAccessInviteStatus = "pending" | "processing" | "used" | "expired" | "cancelled";
+
+type ClientAccessInvite = {
+  id: string;
+  registration_request_id: string;
+  email: string;
+  name: string | null;
+  role: "company_admin";
+  status: ClientAccessInviteStatus;
+  expires_at: string;
+  used_at: string | null;
+  created_at: string;
+};
+
 type PlatformAnnouncement = {
   id: string;
   title: string | null;
@@ -161,6 +211,8 @@ type DashboardData = {
   subscriptions: PlatformSubscription[];
   features: PlatformFeature[];
   leads: PlatformLead[];
+  clientRegistrationRequests: ClientRegistrationRequest[];
+  clientAccessInvites: ClientAccessInvite[];
   announcements: PlatformAnnouncement[];
   statusLogs: PlatformStatusLog[];
   activeUserCounts: Record<string, number>;
@@ -197,6 +249,7 @@ type AnnouncementForm = {
 
 const navigationItems: Array<{ id: SectionId; label: string; icon: typeof BarChart3; route: string }> = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3, route: adminRoutes.dashboard },
+  { id: "client-registrations", label: "Solicitacoes de Cadastro", icon: ClipboardList, route: adminRoutes.clientRegistrations },
   { id: "leads", label: "Leads", icon: Mail, route: "/admin/leads" },
   { id: "companies", label: "Empresas", icon: Building2, route: adminRoutes.companies },
   { id: "plans", label: "Planos", icon: Layers3, route: adminRoutes.plans },
@@ -214,6 +267,10 @@ const sectionCopy: Record<SectionId, { title: string; description: string }> = {
   dashboard: {
     title: "Dashboard administrativo da plataforma.",
     description: "Visao executiva de empresas, leads, receita mapeada e pontos de atencao."
+  },
+  "client-registrations": {
+    title: "Solicitacoes de cadastro de clientes.",
+    description: "Analise cadastros enviados pelo formulario publico antes de liberar uma nova clinica."
   },
   leads: {
     title: "Leads comerciais.",
@@ -285,6 +342,23 @@ const severityLabels: Record<AnnouncementSeverity, string> = {
   critical: "Critico"
 };
 
+const clientRegistrationLabels: Record<ClientRegistrationStatus, string> = {
+  pending: "Pendente",
+  in_review: "Em analise",
+  approved: "Aprovado",
+  rejected: "Reprovado",
+  need_more_info: "Precisa de ajuste",
+  converted: "Convertido"
+};
+
+const clientAccessInviteLabels: Record<ClientAccessInviteStatus, string> = {
+  pending: "Pendente",
+  processing: "Criando acesso",
+  used: "Usado",
+  expired: "Expirado",
+  cancelled: "Cancelado"
+};
+
 const emptyDashboardData: DashboardData = {
   plans: [],
   extras: [],
@@ -292,6 +366,8 @@ const emptyDashboardData: DashboardData = {
   subscriptions: [],
   features: [],
   leads: [],
+  clientRegistrationRequests: [],
+  clientAccessInvites: [],
   announcements: [],
   statusLogs: [],
   activeUserCounts: {}
@@ -428,6 +504,8 @@ async function fetchDashboardData(client: SupabaseClient): Promise<DashboardData
     subscriptions,
     features,
     leads,
+    clientRegistrationRequests,
+    clientAccessInvites,
     announcements,
     statusLogs,
     profiles
@@ -438,12 +516,17 @@ async function fetchDashboardData(client: SupabaseClient): Promise<DashboardData
     client.from("platform_company_subscriptions").select("*").order("created_at", { ascending: false }),
     client.from("platform_features").select("*").order("key", { ascending: true }),
     client.from("platform_leads").select("*").order("created_at", { ascending: false }),
+    client.from("platform_client_registration_requests").select("*").order("created_at", { ascending: false }),
+    client
+      .from("client_access_invites")
+      .select("id,registration_request_id,email,name,role,status,expires_at,used_at,created_at")
+      .order("created_at", { ascending: false }),
     client.from("platform_announcements").select("*").order("created_at", { ascending: false }),
     client.from("platform_company_status_logs").select("*").order("created_at", { ascending: false }).limit(50),
     client.from("profiles").select("company_id,active").eq("active", true)
   ]);
 
-  const responses = [plans, extras, companies, subscriptions, features, leads, announcements, statusLogs, profiles];
+  const responses = [plans, extras, companies, subscriptions, features, leads, clientRegistrationRequests, clientAccessInvites, announcements, statusLogs, profiles];
   const firstError = responses.find((response) => response.error)?.error;
   if (firstError) throw firstError;
 
@@ -461,13 +544,21 @@ async function fetchDashboardData(client: SupabaseClient): Promise<DashboardData
     subscriptions: (subscriptions.data ?? []) as PlatformSubscription[],
     features: (features.data ?? []) as PlatformFeature[],
     leads: (leads.data ?? []) as PlatformLead[],
+    clientRegistrationRequests: (clientRegistrationRequests.data ?? []) as ClientRegistrationRequest[],
+    clientAccessInvites: (clientAccessInvites.data ?? []) as ClientAccessInvite[],
     announcements: (announcements.data ?? []) as PlatformAnnouncement[],
     statusLogs: (statusLogs.data ?? []) as PlatformStatusLog[],
     activeUserCounts
   };
 }
 
-function LoginScreen({ onAuthenticated }: { onAuthenticated: (session: Session, user: User, adminUser: AdminUser) => void }) {
+function LoginScreen({
+  onAuthenticated,
+  onDenied
+}: {
+  onAuthenticated: (session: Session, user: User, adminUser: AdminUser) => void;
+  onDenied: (message: string) => void;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -483,7 +574,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (session: Session, 
     }
 
     if (!isSupabaseConfigured) {
-      setMessage(import.meta.env.DEV ? "Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY." : ADMIN_UNAVAILABLE_MESSAGE);
+      setMessage(ADMIN_UNAVAILABLE_MESSAGE);
       return;
     }
 
@@ -503,7 +594,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (session: Session, 
       const adminUser = await fetchAdminUser(client, data.user.id);
       if (!adminUser) {
         await client.auth.signOut();
-        setMessage(PLATFORM_ADMIN_DENIED_MESSAGE);
+        onDenied(PLATFORM_ADMIN_DENIED_MESSAGE);
         return;
       }
 
@@ -584,7 +675,8 @@ function DashboardApp({
   const [data, setData] = useState<DashboardData>(emptyDashboardData);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [actionMessage, setActionMessage] = useState("Admin Global conectado ao Supabase oficial. Escolha uma tela do menu.");
+  const [actionMessage, setActionMessage] = useState("Admin Global conectado. Escolha uma tela do menu.");
+  const [generatedAccessLinks, setGeneratedAccessLinks] = useState<Record<string, string>>({});
   const [companyForm, setCompanyForm] = useState<CompanyForm>({
     companyName: "",
     tradingName: "",
@@ -618,7 +710,6 @@ function DashboardApp({
       const client = await requireSupabase();
       const nextData = await fetchDashboardData(client);
       setData(nextData);
-      setActionMessage("Dados reais carregados do Supabase.");
     } catch (error) {
       setActionMessage(getAdminActionErrorMessage(error));
     } finally {
@@ -643,10 +734,12 @@ function DashboardApp({
   const activeCompanies = data.companies.filter((company) => company.status === "active").length;
   const blockedCompanies = data.companies.filter((company) => ["inactive", "suspended", "cancelled"].includes(company.status)).length;
   const pendingLeads = data.leads.filter((lead) => lead.status === "new" || lead.status === "qualified").length;
+  const pendingRegistrations = data.clientRegistrationRequests.filter((request) => ["pending", "in_review", "need_more_info"].includes(request.status)).length;
   const recurringRevenue = data.subscriptions
     .filter((subscription) => subscription.status === "active" || subscription.status === "trial")
     .reduce((total, subscription) => total + Number(subscription.monthly_price ?? 0), 0);
   const currentSection = sectionCopy[activeSection];
+  const canManageClientAccess = adminUser.role === "owner" || adminUser.role === "admin";
 
   function openSection(section: SectionId) {
     const route = navigationItems.find((item) => item.id === section)?.route ?? adminRoutes.dashboard;
@@ -870,18 +963,17 @@ function DashboardApp({
     const form = new FormData(formElement);
     const fullName = String(form.get("fullName") ?? "").trim();
     const email = String(form.get("email") ?? "").trim();
-    const temporaryPassword = String(form.get("temporaryPassword") ?? "").trim();
 
     if (!company.clinic_company_id) {
       setActionMessage("Vincule a empresa a uma Company clinica antes de criar usuario.");
       return;
     }
-    if (!fullName || !email || !temporaryPassword) {
-      setActionMessage("Informe nome, e-mail e senha temporaria para criar o admin da clinica.");
+    if (!fullName || !email) {
+      setActionMessage("Informe nome e e-mail para convidar o admin da clinica.");
       return;
     }
-    if (temporaryPassword.length < 6) {
-      setActionMessage("A senha temporaria deve ter pelo menos 6 caracteres.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setActionMessage("Informe um e-mail valido para convidar o admin da clinica.");
       return;
     }
 
@@ -896,8 +988,7 @@ function DashboardApp({
           role: "company_admin",
           active: true,
           modules: clinicAdminDefaultModules,
-          temporaryPassword,
-          sendInviteEmail: false
+          sendInviteEmail: true
         }
       });
       if (error) throw new Error(await getFunctionErrorMessage(error));
@@ -916,11 +1007,291 @@ function DashboardApp({
         }
       });
 
-      formElement.reset();
-      setActionMessage(`Admin da clinica criado para ${company.trading_name || company.company_name}.`);
+      if (formElement.isConnected) formElement.reset();
+      setActionMessage(`Convite de admin da clinica enviado para ${company.trading_name || company.company_name}.`);
       await loadData();
     } catch (error) {
-      setActionMessage(getErrorMessage(error));
+      const message = getErrorMessage(error);
+      setActionMessage(message || "Nao foi possivel criar o admin da clinica. Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateClientRegistrationStatus(request: ClientRegistrationRequest, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const status = String(form.get("status") ?? request.status) as ClientRegistrationStatus;
+    const adminNotes = String(form.get("adminNotes") ?? "").trim();
+
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const { error } = await client
+        .from("platform_client_registration_requests")
+        .update({
+          status,
+          admin_notes: adminNotes || null,
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString()
+        })
+        .eq("id", request.id);
+      if (error) throw error;
+
+      await client.from("platform_admin_audit_logs").insert({
+        actor_user_id: user.id,
+        action: "client_registration_status_updated",
+        entity_type: "platform_client_registration_request",
+        entity_id: request.id,
+        metadata: {
+          previousStatus: request.status,
+          nextStatus: status,
+          clinicName: request.clinic_name
+        }
+      });
+
+      setActionMessage(`Solicitacao de ${request.clinic_name} atualizada para ${clientRegistrationLabels[status]}.`);
+      await loadData();
+    } catch (error) {
+      setActionMessage(getAdminActionErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function generateClientAccessInvite(request: ClientRegistrationRequest, action: "generate" | "resend" = "generate") {
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const { data: result, error } = await client.functions.invoke("client-access", {
+        body: { action, requestId: request.id }
+      });
+      if (error) throw new Error(await getFunctionErrorMessage(error));
+      if (!result?.accessUrl) throw new Error("O servico nao retornou o link de acesso.");
+
+      const accessUrl = String(result.accessUrl);
+      setGeneratedAccessLinks((current) => ({ ...current, [request.id]: accessUrl }));
+      setActionMessage(
+        action === "resend"
+          ? `Novo link gerado para ${request.desired_admin_email || request.responsible_email}. O link anterior foi cancelado.`
+          : `Link de acesso gerado para ${request.desired_admin_email || request.responsible_email}.`
+      );
+      await loadData();
+    } catch (error) {
+      setActionMessage(getErrorMessage(error) || "Nao foi possivel gerar o link de acesso agora.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function cancelClientAccessInvite(invite: ClientAccessInvite) {
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const { data: result, error } = await client.functions.invoke("client-access", {
+        body: { action: "cancel", inviteId: invite.id }
+      });
+      if (error) throw new Error(await getFunctionErrorMessage(error));
+      if (!result?.cancelled) throw new Error("O convite nao foi cancelado.");
+      setGeneratedAccessLinks((current) => {
+        const next = { ...current };
+        delete next[invite.registration_request_id];
+        return next;
+      });
+      setActionMessage(`Convite de ${invite.email} cancelado.`);
+      await loadData();
+    } catch (error) {
+      setActionMessage(getErrorMessage(error) || "Nao foi possivel cancelar o convite agora.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function copyClientAccessLink(requestId: string) {
+    const accessUrl = generatedAccessLinks[requestId];
+    if (!accessUrl) {
+      setActionMessage("Gere um novo link antes de copiar.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(accessUrl);
+      setActionMessage("Link de acesso copiado com seguranca.");
+    } catch {
+      setActionMessage("Nao foi possivel copiar automaticamente. Selecione o link exibido e copie manualmente.");
+    }
+  }
+
+  async function convertClientRegistration(request: ClientRegistrationRequest, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (request.approved_company_id || request.approved_platform_company_id || request.status === "converted") {
+      setActionMessage("Esta solicitacao ja foi convertida em clinica.");
+      return;
+    }
+
+    const form = new FormData(event.currentTarget);
+    const planId = String(form.get("planId") ?? "").trim();
+    const status = String(form.get("status") ?? "trial") as CompanyStatus;
+    const maxUsersValue = String(form.get("maxUsers") ?? "").trim();
+    const maxUsers = maxUsersValue === "" ? null : Number(maxUsersValue);
+    const adminName = String(form.get("adminName") ?? "").trim();
+    const adminEmail = String(form.get("adminEmail") ?? "").trim();
+    const adminNotes = String(form.get("adminNotes") ?? "").trim();
+
+    if (!planId) {
+      setActionMessage("Selecione um plano antes de converter a solicitacao em clinica.");
+      return;
+    }
+    if (maxUsers !== null && (!Number.isInteger(maxUsers) || maxUsers < 0)) {
+      setActionMessage("Informe um limite de usuarios inteiro maior ou igual a zero, ou deixe vazio para ilimitado.");
+      return;
+    }
+    if (adminEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) {
+      setActionMessage("Informe um e-mail valido para convidar o admin da clinica.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const client = await requireSupabase();
+      const timestamp = new Date().toISOString();
+      const plan = data.plans.find((item) => item.id === planId) ?? null;
+      const planStatus = status === "active" ? "active" : status === "trial" ? "trial" : "suspended";
+      const { data: clinicalPlan, error: clinicalPlanError } = await client
+        .from("plans")
+        .select("id")
+        .eq("slug", plan?.slug ?? "")
+        .eq("active", true)
+        .maybeSingle();
+      if (clinicalPlanError) throw clinicalPlanError;
+
+      const { data: clinicCompany, error: clinicError } = await client
+        .from("companies")
+        .insert({
+          name: request.clinic_name,
+          legal_name: request.clinic_name,
+          document: request.document_cnpj,
+          contact_email: request.email ?? request.responsible_email,
+          contact_phone: request.phone ?? request.responsible_phone,
+          plan_id: clinicalPlan?.id ?? null,
+          plan_status: planStatus,
+          blocked_at: ["inactive", "suspended", "cancelled"].includes(status) ? timestamp : null
+        })
+        .select("id")
+        .single();
+      if (clinicError) throw clinicError;
+
+      const clinicCompanyId = String(clinicCompany.id);
+
+      const { error: settingsError } = await client.from("company_settings").insert({
+        company_id: clinicCompanyId,
+        display_name: request.clinic_name,
+        commercial_data: {
+          registrationRequestId: request.id,
+          clinicType: request.clinic_type,
+          address: request.address,
+          city: request.city,
+          state: request.state,
+          zipCode: request.zip_code,
+          websiteOrInstagram: request.website_or_instagram,
+          source: request.source,
+          sourceCampaign: request.source_campaign
+        }
+      });
+      if (settingsError) throw settingsError;
+
+      const { data: platformCompany, error: platformError } = await client
+        .from("platform_companies")
+        .insert({
+          clinic_company_id: clinicCompanyId,
+          company_name: request.clinic_name,
+          trading_name: request.clinic_name,
+          cnpj: request.document_cnpj,
+          responsible_name: request.responsible_name,
+          responsible_email: request.responsible_email,
+          responsible_phone: request.responsible_phone,
+          status,
+          plan_id: planId || null,
+          activated_at: status === "active" ? timestamp : null,
+          suspended_at: status === "suspended" ? timestamp : null,
+          cancelled_at: status === "cancelled" ? timestamp : null
+        })
+        .select("id")
+        .single();
+      if (platformError) throw platformError;
+
+      const platformCompanyId = String(platformCompany.id);
+
+      const { error: subscriptionError } = await client.from("platform_company_subscriptions").insert({
+        company_id: platformCompanyId,
+        plan_id: planId || null,
+        status: status === "active" ? "active" : status === "trial" ? "trial" : "suspended",
+        monthly_price: plan?.monthly_price ?? null,
+        setup_fee: plan?.setup_fee ?? null,
+        max_users: maxUsers,
+        starts_at: new Date().toISOString().slice(0, 10),
+        contract_min_months: 3,
+        notes: `Criada a partir da solicitacao publica ${request.id}.`
+      });
+      if (subscriptionError) throw subscriptionError;
+
+      const { error: requestUpdateError } = await client
+        .from("platform_client_registration_requests")
+        .update({
+          status: "converted",
+          admin_notes: adminNotes || request.admin_notes,
+          reviewed_by: user.id,
+          reviewed_at: timestamp,
+          approved_company_id: clinicCompanyId,
+          approved_platform_company_id: platformCompanyId,
+          desired_admin_name: adminName || request.desired_admin_name || request.responsible_name,
+          desired_admin_email: adminEmail || request.desired_admin_email || request.responsible_email
+        })
+        .eq("id", request.id);
+      if (requestUpdateError) throw requestUpdateError;
+
+      let accessUrl = "";
+      let inviteWarning = "";
+      if (adminName && adminEmail) {
+        const { data: result, error } = await client.functions.invoke("client-access", {
+          body: {
+            action: "generate",
+            requestId: request.id
+          }
+        });
+        if (error) {
+          inviteWarning = await getFunctionErrorMessage(error);
+        } else {
+          accessUrl = String(result?.accessUrl ?? "");
+          if (accessUrl) setGeneratedAccessLinks((current) => ({ ...current, [request.id]: accessUrl }));
+          else inviteWarning = "O servico nao retornou o link de acesso.";
+        }
+      }
+
+      await client.from("platform_admin_audit_logs").insert({
+        actor_user_id: user.id,
+        action: "client_registration_converted",
+        entity_type: "platform_client_registration_request",
+        entity_id: request.id,
+        company_id: platformCompanyId,
+        metadata: {
+          clinicCompanyId,
+          platformCompanyId,
+          planId: planId || null,
+          maxUsers,
+          generatedClientAccessInvite: Boolean(accessUrl)
+        }
+      });
+
+      await loadData();
+      setActionMessage(
+        accessUrl
+          ? `Solicitacao de ${request.clinic_name} convertida. O link para o cliente criar o acesso esta pronto.`
+          : inviteWarning
+            ? `Solicitacao de ${request.clinic_name} convertida, mas o link nao foi gerado: ${inviteWarning}`
+            : `Solicitacao de ${request.clinic_name} convertida em clinica. Gere o link de acesso quando os dados do admin estiverem confirmados.`
+      );
+    } catch (error) {
+      setActionMessage(getAdminActionErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -1050,7 +1421,7 @@ function DashboardApp({
 
         <div className="security-note">
           <ShieldCheck size={17} />
-          <span>Repositorio separado, dados reais por RLS e Supabase Auth. Sem chave secreta no frontend.</span>
+          <span>Ambiente administrativo separado, com dados reais e acesso protegido por permissoes.</span>
         </div>
       </aside>
 
@@ -1097,14 +1468,170 @@ function DashboardApp({
             </article>
             <article className="metric-card">
               <span><Users size={20} /></span>
-              <strong>{pendingLeads}</strong>
-              <small>Leads para acompanhar</small>
+              <strong>{pendingRegistrations}</strong>
+              <small>Cadastros para analisar</small>
             </article>
             <article className="metric-card metric-card--wide">
               <span><CreditCard size={20} /></span>
               <strong>{formatCurrency(recurringRevenue)}</strong>
               <small>Receita mensal mapeada</small>
             </article>
+          </section>
+        )}
+
+        {activeSection === "client-registrations" && (
+          <section className="panel" id="client-registrations">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">Cadastro Cliente</span>
+                <h2>Solicitacoes enviadas pelo formulario publico</h2>
+              </div>
+            </div>
+
+            <div className="request-grid">
+              {data.clientRegistrationRequests.map((request) => (
+                <article className="company-card" key={request.id}>
+                  {(() => {
+                    const invite = data.clientAccessInvites.find((item) => item.registration_request_id === request.id);
+                    const generatedLink = generatedAccessLinks[request.id];
+                    return (
+                      <>
+                  <div className="card-title-row">
+                    <span className={`badge badge--${request.status}`}>{clientRegistrationLabels[request.status]}</span>
+                    <small>{formatDate(request.created_at)}</small>
+                  </div>
+                  <div>
+                    <h3>{request.clinic_name}</h3>
+                    <p>{request.responsible_name} - {request.responsible_email}</p>
+                  </div>
+                  <dl>
+                    <div><dt>CNPJ</dt><dd>{request.document_cnpj || "Nao informado"}</dd></div>
+                    <div><dt>Telefone</dt><dd>{request.phone || request.responsible_phone || "Nao informado"}</dd></div>
+                    <div><dt>Cidade/UF</dt><dd>{[request.city, request.state].filter(Boolean).join(" / ") || "Nao informado"}</dd></div>
+                    <div><dt>Plano de interesse</dt><dd>{request.interested_plan || "Nao informado"}</dd></div>
+                    <div><dt>Usuarios estimados</dt><dd>{request.estimated_users ?? "Nao informado"}</dd></div>
+                    <div><dt>Profissionais</dt><dd>{request.estimated_professionals ?? "Nao informado"}</dd></div>
+                    <div><dt>Origem</dt><dd>{request.source || "Direto"}</dd></div>
+                    <div><dt>Campanha</dt><dd>{request.source_campaign || "Nao informada"}</dd></div>
+                  </dl>
+                  {request.notes && <p className="form-helper">{request.notes}</p>}
+                  {request.admin_notes && <p className="form-helper"><strong>Nota interna:</strong> {request.admin_notes}</p>}
+
+                  <details className="embedded-form">
+                    <summary>Analisar solicitacao</summary>
+                    <form className="form-grid form-grid--compact" onSubmit={(event) => void updateClientRegistrationStatus(request, event)}>
+                      <label>Status
+                        <select defaultValue={request.status} name="status">
+                          {Object.entries(clientRegistrationLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+                        </select>
+                      </label>
+                      <label className="form-grid--span">Observacao interna
+                        <textarea defaultValue={request.admin_notes ?? ""} name="adminNotes" rows={3} />
+                      </label>
+                      <button type="submit" className="button button--secondary" disabled={saving}>Salvar analise</button>
+                    </form>
+                  </details>
+
+                  {request.status === "converted" && request.approved_company_id && (
+                    <details className="embedded-form" open={Boolean(generatedLink)}>
+                      <summary>Acesso do cliente</summary>
+                      <div className="form-grid form-grid--compact">
+                        <div className="form-grid--span">
+                          <span className="field-label">E-mail autorizado</span>
+                          <strong>{request.desired_admin_email || request.responsible_email}</strong>
+                        </div>
+                        {invite && (
+                          <>
+                            <div>
+                              <span className="field-label">Status do convite</span>
+                              <span className={`badge badge--${invite.status}`}>{clientAccessInviteLabels[invite.status]}</span>
+                            </div>
+                            <div>
+                              <span className="field-label">Validade</span>
+                              <span>{formatDate(invite.expires_at)}</span>
+                            </div>
+                          </>
+                        )}
+                        {generatedLink && (
+                          <label className="form-grid--span">Link de uso unico
+                            <input readOnly value={generatedLink} />
+                            <small className="form-helper">O token completo aparece somente agora. Copie e envie ao cliente pelo canal autorizado.</small>
+                          </label>
+                        )}
+                        <div className="inline-actions form-grid--span">
+                          {!canManageClientAccess && (
+                            <p className="form-helper">Somente Owner ou Admin pode gerar e cancelar links de primeiro acesso.</p>
+                          )}
+                          <button
+                            className="button button--secondary"
+                            disabled={saving || invite?.status === "processing" || !canManageClientAccess}
+                            type="button"
+                            onClick={() => void generateClientAccessInvite(request, invite ? "resend" : "generate")}
+                          >
+                            {invite ? "Gerar novo link" : "Gerar link de acesso"}
+                          </button>
+                          {generatedLink && (
+                            <button className="button button--secondary" disabled={saving} type="button" onClick={() => void copyClientAccessLink(request.id)}>
+                              Copiar link
+                            </button>
+                          )}
+                          {invite && ["pending", "processing"].includes(invite.status) && (
+                            <button className="button button--danger" disabled={saving || !canManageClientAccess} type="button" onClick={() => void cancelClientAccessInvite(invite)}>
+                              Cancelar convite
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </details>
+                  )}
+
+                  <details className="embedded-form">
+                    <summary>Converter em clinica</summary>
+                    <form className="form-grid form-grid--compact" onSubmit={(event) => void convertClientRegistration(request, event)}>
+                      <label>Status inicial
+                        <select defaultValue="trial" name="status">
+                          <option value="trial">Trial</option>
+                          <option value="active">Ativa</option>
+                          <option value="suspended">Suspensa</option>
+                        </select>
+                      </label>
+                      <label>Plano
+                        <select defaultValue={data.plans.find((plan) => plan.slug === request.interested_plan)?.id ?? ""} name="planId">
+                          <option value="">Selecione um plano</option>
+                          {data.plans.map((plan) => <option value={plan.id} key={plan.id}>{plan.name}</option>)}
+                        </select>
+                      </label>
+                      <label>Limite de usuarios
+                        <input defaultValue={request.estimated_users ?? ""} min={0} name="maxUsers" placeholder="Vazio = ilimitado" type="number" />
+                      </label>
+                      <label>Nome do admin
+                        <input defaultValue={request.desired_admin_name ?? request.responsible_name} name="adminName" />
+                      </label>
+                      <label>E-mail do admin
+                        <input defaultValue={request.desired_admin_email ?? request.responsible_email} name="adminEmail" type="email" />
+                      </label>
+                      <label className="form-grid--span">Observacao da conversao
+                        <textarea defaultValue={request.admin_notes ?? ""} name="adminNotes" rows={3} />
+                      </label>
+                      <p className="form-helper form-grid--span">
+                        A conversao cria a clinica, configura a assinatura e gera um link seguro para o cliente definir a propria senha.
+                      </p>
+                      <button
+                        type="submit"
+                        className="button"
+                        disabled={saving || request.status === "converted" || Boolean(request.approved_company_id)}
+                      >
+                        Converter em clinica
+                      </button>
+                    </form>
+                  </details>
+                      </>
+                    );
+                  })()}
+                </article>
+              ))}
+              {!data.clientRegistrationRequests.length && <p>Nenhuma solicitacao de cadastro recebida ainda.</p>}
+            </div>
           </section>
         )}
 
@@ -1223,11 +1750,10 @@ function DashboardApp({
                     <form className="form-grid form-grid--compact" onSubmit={(event) => void createClinicAdminUser(company, event)}>
                       <label>Nome completo<input name="fullName" placeholder="Administrador da clinica" /></label>
                       <label>E-mail de login<input name="email" placeholder="admin@clinica.com" type="email" /></label>
-                      <label>Senha temporaria<input autoComplete="new-password" name="temporaryPassword" placeholder="Minimo 6 caracteres" type="password" /></label>
                       <p className="form-helper">
-                        O usuario sera criado no Supabase Auth e vinculado ao profile da Company clinica {company.clinic_company_id || "nao vinculada"}.
+                        O usuario recebera um convite seguro por e-mail e ficara vinculado a clinica {company.clinic_company_id || "nao vinculada"}.
                       </p>
-                      <button type="submit" className="button button--secondary" disabled={saving || !company.clinic_company_id}>Criar admin da clinica</button>
+                      <button type="submit" className="button button--secondary" disabled={saving || !company.clinic_company_id}>{saving ? "Enviando convite..." : "Convidar admin da clinica"}</button>
                     </form>
                   </details>
                   <div className="card-actions">
@@ -1378,7 +1904,7 @@ function DashboardApp({
             <div className="panel-heading"><div><span className="eyebrow">Configuracoes da Plataforma</span><h2>Preparacao segura para producao</h2></div></div>
             <div className="settings-grid">
               <article className="compact-card"><Sparkles size={22} /><strong>Billing readiness</strong><p>Valores, setup, extras e contratos estao modelados. Gateway de pagamento ainda nao foi integrado.</p></article>
-            <article className="compact-card"><ShieldCheck size={22} /><strong>Seguranca</strong><p>Admin separado usa Supabase Auth, RLS e permissao em platform_admin_users. Sem chave secreta no navegador.</p></article>
+            <article className="compact-card"><ShieldCheck size={22} /><strong>Seguranca</strong><p>Admin separado usa autenticacao real e permissoes administrativas, sem expor credenciais no navegador.</p></article>
               <article className="compact-card"><Flag size={22} /><strong>Features futuras</strong><p>Features prontas para liberacao por plano ou empresa, sem bloquear modulo clinico automaticamente nesta etapa.</p></article>
             </div>
           </section>
@@ -1411,7 +1937,6 @@ export function App() {
         setSession(null);
         setUser(null);
         setAdminUser(null);
-        setBlockMessage("");
         return;
       }
 
@@ -1494,7 +2019,7 @@ export function App() {
   }
 
   if (!session || !user || !adminUser || currentPath === "/" || currentPath === adminRoutes.login) {
-    return <LoginScreen onAuthenticated={handleAuthenticated} />;
+    return <LoginScreen onAuthenticated={handleAuthenticated} onDenied={setBlockMessage} />;
   }
 
   return <DashboardApp user={user} adminUser={adminUser} onLogout={() => void handleLogout()} />;
