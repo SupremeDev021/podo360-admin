@@ -1,22 +1,40 @@
-# Domínio de produção do Admin
+# Dominio de producao do Admin
 
-## Destino definitivo
+## Estado atual
 
-- Domínio: `podoadmin360.supremetechdev.com`
-- Hospedagem: GitHub Pages do repositório `SupremeDev021/podo360-admin`
-- Origem DNS esperada: CNAME `podoadmin360` para `supremedev021.github.io`
-- Proxy inicial: DNS only
+- Dominio: `https://podoadmin360.supremetechdev.com`
+- Hospedagem: GitHub Pages do repositorio `SupremeDev021/podo360-admin`
+- DNS: CNAME `podoadmin360` para `supremedev021.github.io`
+- Proxy Cloudflare: DNS only
+- HTTPS: obrigatorio no GitHub Pages
+- Healthcheck: `/healthcheck.json`
 
-O build usa caminhos relativos para funcionar no domínio customizado e no endereço de contingência `https://supremedev021.github.io/podo360-admin/`.
+O registro antigo do Cloudflare Tunnel foi substituido em 09/08/2026. O Admin
+nao depende de servidor local, Tailscale, Nginx local ou Tunnel.
 
-## Ordem operacional
+## Build e fallback
 
-1. Remover o registro ligado ao Cloudflare Tunnel perdido.
-2. Criar o CNAME em modo DNS only.
-3. Confirmar que o DNS resolve para o GitHub Pages.
-4. Configurar `podoadmin360.supremetechdev.com` em Settings > Pages.
-5. Aguardar o certificado e habilitar Enforce HTTPS.
-6. Confirmar `/healthcheck.json`, login e páginas administrativas.
-7. Atualizar `HEALTHCHECK_ADMIN_URL` para o domínio definitivo.
+O build usa caminhos relativos e preserva a URL do GitHub Pages durante a
+transicao:
 
-Não reativar dependência de servidor local, Tailscale, Nginx local ou Tunnel.
+`https://supremedev021.github.io/podo360-admin/`
+
+O artefato de deploy inclui `public/CNAME` com o dominio definitivo.
+
+## Supabase Auth
+
+As URLs permitidas devem incluir:
+
+- `https://podoadmin360.supremetechdev.com/*`
+- `https://podo360.supremetechdev.com/*`
+- `https://cadastro.podo360.supremetechdev.com/*`
+- `https://supremedev021.github.io/podo360-admin/*`
+- `http://localhost:5173/*` somente para desenvolvimento
+
+## Validacao
+
+- Login de Admin Global no dominio final.
+- Usuario clinico comum bloqueado.
+- Dashboard, Empresas, Planos, Assinaturas, Solicitacoes de Cadastro, Leads,
+  Avisos, Auditoria e Configuracoes carregados.
+- Nenhum segredo ou chave administrativa no frontend.

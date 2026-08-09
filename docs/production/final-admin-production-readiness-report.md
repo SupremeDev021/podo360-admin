@@ -1,33 +1,46 @@
-# Relatorio Final do Admin Global - Podo360
+# Relatorio final do Admin Global
 
-Data: 13/07/2026
+Data: 09/08/2026
 
-## Status
+## Infraestrutura
 
-Admin Global funcionando e publicado no GitHub Pages, mas a liberacao final conjunta com o Podo360 clinico ainda depende da nova rodada E2E autenticada do sistema clinico apos corrigir as credenciais do Usuario B.
-
-## Correcoes desta rodada
-
-- Removida a rota publica temporaria `/admin/setup`.
-- Removido o botao "Setup do primeiro Admin Global" da tela de login.
-- Removido o componente publico que montava SQL de vinculacao administrativa.
-- Atualizado o README para registrar que novos administradores devem ser criados por fluxo operacional controlado no Supabase/Auth e vinculados em `platform_admin_users`.
+- Dominio: `https://podoadmin360.supremetechdev.com`
+- Hospedagem: GitHub Pages
+- DNS: CNAME para `supremedev021.github.io`, DNS only
+- HTTPS: habilitado e obrigatorio
+- Healthcheck: aprovado
+- Servidor local e Cloudflare Tunnel: removidos do runtime
 
 ## Validacoes
 
+- Login owner/Admin Global: aprovado.
+- Dashboard e telas administrativas existentes: aprovados.
+- Logout: aprovado.
+- Console/page errors no smoke autenticado: zero.
 - Typecheck: aprovado.
 - Build: aprovado.
-- GitHub Actions Pages: validado anteriormente com secrets reais sem exposicao de valores.
-- Bundle publicado: validado anteriormente com `VITE_SUPABASE_URL` correto, chave publica em formato publishable e sem dados mockados.
+- Lint: nao existe script ou dependencia ESLint neste repositorio.
+
+## Cadastro publico
+
+- Tabela `platform_client_registration_requests`: existente no ambiente oficial.
+- Anonimo: insercao permitida e leitura bloqueada por RLS.
+- Admin Global ativo: leitura e atualizacao permitidas.
+- Tela `Solicitacoes de Cadastro`: integrada ao menu.
+- Conversao: prepara clinica, configuracoes, assinatura, limite e acesso do
+  administrador da clinica mediante confirmacao.
+- Auditoria: usada nas alteracoes administrativas do fluxo.
 
 ## Seguranca
 
-- Nenhuma senha foi adicionada ao codigo.
-- Nenhum `.env`, `.env.local` ou `.env.test.local` foi versionado.
-- Nenhuma chave secreta ou `service_role` foi adicionada ao frontend.
-- A criacao publica de Admin Global foi removida depois da criacao do owner.
+- Nenhuma senha, token ou `.env` foi versionado.
+- Nenhuma `service_role` existe no frontend.
+- A criacao publica de Admin Global permanece removida.
+- O repositorio preserva apenas chaves publicas por variaveis protegidas de
+  build.
 
-## Pendencias
+## Pendencias de validacao funcional
 
-- Rerodar fluxo completo autenticado do Podo360 clinico apos corrigir Usuario B.
-- Validar novamente o Admin publicado apos novo deploy da remocao do setup publico.
+O fluxo publico completo deve ser reexecutado apos o deploy desta integracao:
+enviar solicitacao ficticia, confirmar no Admin, alterar status e registrar o
+resultado controlado.
